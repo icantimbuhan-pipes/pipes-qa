@@ -13,7 +13,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.prompt import Confirm
 from rich.rule import Rule
 from rich.text import Text
 from rich import box
@@ -157,12 +156,33 @@ def _trigger_and_wait(provider, instruction: str = "") -> bool:
 
 # ── Checklist helpers ──────────────────────────────────────────────────────────
 
-def _ask(item_text: str) -> tuple[bool, str]:
-    passed = Confirm.ask("    [bold]Pass?[/bold]", default=True)
-    note = ""
-    if not passed:
-        note = console.input("    [dim]Failure note (Enter to skip): [/dim]").strip()
-    return passed, note
+def _ask(item_text: str, provider=None) -> tuple[bool, str]:
+    """
+    Ask pass/fail for a checklist item.
+      y / Enter  — pass
+      n          — fail (prompts for a note)
+      r          — retrigger the call, then re-ask this same item
+    """
+    while True:
+        hint = "    [bold]Pass?[/bold]  [dim][y] pass   [n] fail   [r] retrigger call[/dim]  → "
+        resp = console.input(hint).strip().lower()
+
+        if resp in ("y", "yes", ""):
+            return True, ""
+
+        elif resp in ("n", "no"):
+            note = console.input("    [dim]Failure note (Enter to skip): [/dim]").strip()
+            return False, note
+
+        elif resp == "r":
+            if provider:
+                console.print()
+                _trigger_and_wait(provider)
+            else:
+                console.print("    [dim]No provider available to retrigger.[/dim]")
+
+        else:
+            console.print("    [dim]y = pass   n = fail   r = retrigger[/dim]")
 
 
 def _save_report(results: dict):
@@ -224,7 +244,7 @@ def run_provider(provider) -> dict:
             if item.note:
                 console.print(f"  [dim]        → {item.note}[/dim]")
 
-            passed, note = _ask(item.text)
+            passed, note = _ask(item.text, provider=provider)
 
             icon = "[green]✓ PASS[/green]" if passed else "[red]✗ FAIL[/red]"
             console.print(f"        {icon}" + (f"  — {note}" if note else ""))
