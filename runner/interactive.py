@@ -21,6 +21,7 @@ from rich import box
 
 from runner.report import send_slack_report
 from runner.monitoring import run_monitoring_form
+from runner.hourly_report import run_hourly_form, send_hourly_report
 
 console = Console()
 
@@ -70,6 +71,7 @@ CHECKLISTS = [
         "module":           "checklists.hourly_heavy_khomp_qa",
         "attr":             "HOURLY_HEAVY_KHOMP_QA",
         "default_provider": "heavy_khomp",
+        "report_type":      "hourly",
         "active":           True,
     },
 ]
@@ -457,15 +459,27 @@ def main():
     resume_data   = _check_resume(entry, checklist)
     results       = run_checklist(entry, resume_data=resume_data)
 
-    results["monitoring"] = run_monitoring_form()
-
-    console.print()
-    with console.status("[dim]Sending Slack report...[/dim]", spinner="dots"):
-        try:
-            sent = send_slack_report(results)
-            if sent:
-                console.print("[green]✓[/green] Slack report sent.")
-            else:
-                console.print("[yellow]⚠[/yellow]  SLACK_WEBHOOK_URL not set — add it to .env.")
-        except Exception as e:
-            console.print(f"[red]✗[/red] Slack send failed: {e}")
+    if entry.get("report_type") == "hourly":
+        form = run_hourly_form(results)
+        console.print()
+        with console.status("[dim]Sending Slack report...[/dim]", spinner="dots"):
+            try:
+                sent = send_hourly_report(form)
+                if sent:
+                    console.print("[green]✓[/green] Hourly Slack report sent.")
+                else:
+                    console.print("[yellow]⚠[/yellow]  SLACK_WEBHOOK_URL not set — add it to .env.")
+            except Exception as e:
+                console.print(f"[red]✗[/red] Slack send failed: {e}")
+    else:
+        results["monitoring"] = run_monitoring_form()
+        console.print()
+        with console.status("[dim]Sending Slack report...[/dim]", spinner="dots"):
+            try:
+                sent = send_slack_report(results)
+                if sent:
+                    console.print("[green]✓[/green] Slack report sent.")
+                else:
+                    console.print("[yellow]⚠[/yellow]  SLACK_WEBHOOK_URL not set — add it to .env.")
+            except Exception as e:
+                console.print(f"[red]✗[/red] Slack send failed: {e}")
