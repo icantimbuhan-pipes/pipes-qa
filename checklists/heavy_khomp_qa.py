@@ -21,10 +21,10 @@ class Section:
 
 HEAVY_KHOMP_QA: list[Section] = [
 
-    # ── 1. Account Used ──────────────────────────────────────────────────────────
+    # ── 1/5  Account Used ────────────────────────────────────────────────────────
     Section(
         id="account_used",
-        title="1. Account Used",
+        title="Account Used",
         trigger_call_at_start=True,
         start_instruction="Answer your Google Voice and listen to the full IVR greeting.",
         items=[
@@ -49,12 +49,12 @@ HEAVY_KHOMP_QA: list[Section] = [
         ],
     ),
 
-    # ── 2. Keypress Actions ──────────────────────────────────────────────────────
+    # ── 2/5  Keypress Actions ────────────────────────────────────────────────────
     Section(
         id="keypress_actions",
-        title="2. Test Keypress Actions",
+        title="Test Keypress Actions",
         trigger_call_at_start=True,
-        start_instruction="Answer your Google Voice. Test each keypress option. Press [R] to retrigger for the next option.",
+        start_instruction="Answer your Google Voice. Press [R] to retrigger for each new option.",
         items=[
             CheckItem("kp_transfer",  "Transfer Call Destination OB & IB"),
             CheckItem("kp_sched_am",  "Schedule Tomorrow Morning OB & IB"),
@@ -62,65 +62,59 @@ HEAVY_KHOMP_QA: list[Section] = [
             CheckItem("kp_sched_eve", "Schedule Tomorrow Evening OB & IB"),
             CheckItem(
                 "kp_continue",
-                "Continue OB & IB",
-                note="Make sure call is transferred & make sure call is ended after pressing End Call",
+                "Continue: Make sure call is transferred & Make sure call is ended after pressing End Call OB & IB",
             ),
-            CheckItem("kp_endcall",   "End Call OB & IB"),
+            CheckItem("kp_endcall", "End Call OB & IB"),
             CheckItem(
                 "kp_dnc",
-                "DNC OB & IB",
-                note="Make sure phone number is suppressed then remove from suppression",
+                "DNC: Make sure phone number is suppressed then remove from suppression OB & IB",
             ),
         ],
     ),
 
-    # ── 3. Dynamic Inserts ───────────────────────────────────────────────────────
+    # ── 3/5  Dynamic Inserts ─────────────────────────────────────────────────────
     Section(
         id="dynamic_inserts",
-        title="3. Dynamic Inserts OB & IB",
+        title="Dynamic Inserts OB & IB",
         trigger_call_at_start=True,
         start_instruction="Answer your Google Voice. Verify each value is read correctly by the IVR.",
         items=[
-            CheckItem("di_firstname", "First Name OB & IB"),
-            CheckItem("di_lastname",  "Last Name OB & IB"),
-            CheckItem("di_city",      "City OB & IB"),
-            CheckItem("di_state",     "State OB & IB"),
-            CheckItem("di_postal",    "Postal Code OB & IB"),
-            CheckItem("di_phone",     "Pipes Phone Number OB & IB"),
-            CheckItem("di_subid",     "SubID 1-10 OB & IB",
-                      note="Verify all SubID values are inserted correctly"),
+            CheckItem(
+                "di_all",
+                "First Name, Last Name, City, State, Postal Code, Pipes Phone Number, SubID 1-10 OB & IB",
+            ),
         ],
     ),
 
-    # ── 4. Detection ─────────────────────────────────────────────────────────────
+    # ── 4/5  Detection ───────────────────────────────────────────────────────────
     Section(
         id="amd_detection",
-        title="4. Detection",
+        title="Detection",
         items=[
             CheckItem(
                 "amd_hello",
-                'Send an outbound call, answer and say "Hello". IVR should play.',
+                'Send an outbound call, answer the call and say "Hello". IVR should play.',
                 trigger_call=True,
                 call_instruction='Answer your Google Voice and say "Hello"',
                 note="Expected: IVR plays (live-person detected)",
             ),
             CheckItem(
                 "amd_hello_name",
-                'Send an outbound call, answer and say "Hello this is [Name]". IVR should play.',
+                'Send an outbound call, answer the call and say "Hello this is [Name]". IVR should play.',
                 trigger_call=True,
                 call_instruction='Answer and say "Hello this is [your name]"',
                 note="Expected: IVR plays (live-person detected)",
             ),
             CheckItem(
                 "amd_full_phrase",
-                'Send an outbound call, answer and say "Hey this is [Name] with Pipes how may I help you?". IVR should stop. Detection will be voicemail.',
+                'Send an outbound call, answer the call and say "Hey this is [Name] with Pipes how may I help you?". IVR should stop. Detection will be voicemail.',
                 trigger_call=True,
                 call_instruction='Answer and say "Hey this is [Name] with Pipes how may I help you?"',
                 note="Expected: IVR stops (voicemail detected)",
             ),
             CheckItem(
                 "amd_silence",
-                "Send an outbound call, answer and do not say anything. IVR should be played and detection will be live-person.",
+                "Send an outbound call, answer the call and do not say anything. IVR should be played and detection will be live-person.",
                 trigger_call=True,
                 call_instruction="Answer your Google Voice but DO NOT say anything — stay completely silent",
                 note="Expected: IVR plays (live-person detected)",
@@ -128,21 +122,16 @@ HEAVY_KHOMP_QA: list[Section] = [
         ],
     ),
 
-    # ── 5. Auto-Connect ──────────────────────────────────────────────────────────
+    # ── 5/5  Auto-Connect ────────────────────────────────────────────────────────
     Section(
         id="auto_connect",
-        title="5. Auto-Connect",
+        title="Auto-Connect",
         trigger_call_at_start=True,
         start_instruction="Answer your Google Voice. Do NOT press any key — wait for auto-connect.",
         items=[
             CheckItem(
-                "ac_transfer",
-                "Outbound: Make sure call is transferred automatically when a lead answers the call.",
-            ),
-            CheckItem(
-                "ac_decline",
-                "Outbound: Make sure call is scheduled for the next dialling pattern if call is declined/rejected.",
-                note="Decline the call and verify it is rescheduled",
+                "ac_outbound",
+                "Outbound: Make sure call is transferred automatically when a lead answers the call. & Make sure call is scheduled for the next dialling pattern if call is declined/rejected.",
             ),
         ],
     ),
