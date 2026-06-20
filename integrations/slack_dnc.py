@@ -32,18 +32,26 @@ DNC_CHANNEL = os.environ.get("DNC_SLACK_CHANNEL", "")
 def extract_phones(text: str) -> list[str]:
     """
     Return all unique 10-digit US numbers found in text.
-    Handles: (XXX) XXX-XXXX, XXX-XXX-XXXX, raw 10/11-digit, multi-line.
+    Handles: Slack tel: links, (XXX) XXX-XXXX, XXX-XXX-XXXX, raw 10/11-digit, multi-line.
     """
     found = []
 
-    # Phase 1 — raw 10/11-digit sequences (no spaces between digits)
+    # Phase 1 — Slack auto-formats phones as <tel:5122227114|(512) 222-7114>
+    for m in re.findall(r"<tel:(\d+)\|", text):
+        digits = m
+        if len(digits) == 11 and digits[0] == "1":
+            digits = digits[1:]
+        if len(digits) == 10:
+            found.append(digits)
+
+    # Phase 2 — raw 10/11-digit sequences
     for m in re.findall(r"\b\d{10,11}\b", text):
         if len(m) == 11 and m[0] == "1":
             m = m[1:]
         if len(m) == 10:
             found.append(m)
 
-    # Phase 2 — formatted numbers like (XXX) XXX-XXXX or XXX-XXX-XXXX
+    # Phase 3 — formatted numbers like (XXX) XXX-XXXX or XXX-XXX-XXXX
     for m in re.findall(r"\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4}", text):
         digits = re.sub(r"\D", "", m)
         if len(digits) == 10:
@@ -67,6 +75,46 @@ def dnc_number(phone: str) -> bool:
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+def _startup_checks(bot_token: str, channel: str) -> None:
+    """Verify bot auth and channel membership at startup."""
+    try:
+        r = httpx.get("https://slack.com/api/auth.test",
+                      headers={"Authorization": f"Bearer {bot_token}"})
+        d = r.json()
+        if not d.get("ok"):
+            log.warning(f"Slack auth failed: {d.get('error')} — check SLACK_BOT_TOKEN")
+            return
+        bot_id = d.get("user_id", "")
+        log.info(f"Slack: authenticated as @{d.get('user')} ({bot_id}) in {d.get('team')}")
+
+        if not channel:
+            log.warning("DNC_SLACK_CHANNEL not set — watching ALL channels (not recommended for production)")
+            return
+
+        ri = httpx.get(f"https://slack.com/api/conversations.info?channel={channel}",
+                       headers={"Authorization": f"Bearer {bot_token}"})
+        ci = ri.json()
+        if not ci.get("ok"):
+            log.error(
+                f"Channel {channel} not found (error={ci.get('error')}).\n"
+                f"  Fix: Open the channel in Slack → /invite @{d.get('user')} → copy the channel ID.\n"
+                f"  Then update DNC_SLACK_CHANNEL in .env and restart."
+            )
+            return
+
+        ch = ci.get("channel", {})
+        if ch.get("is_member"):
+            log.info(f"Bot is a member of #{ch.get('name')} ({channel}) ✅")
+        else:
+            log.error(
+                f"Bot is NOT in #{ch.get('name')} ({channel}).\n"
+                f"  Fix: In Slack, open #{ch.get('name')} and type:  /invite @{d.get('user')}\n"
+                f"  Then restart the bot."
+            )
+    except Exception as exc:
+        log.warning(f"Startup check error: {exc}")
+
+
 def main():
     from slack_bolt import App
     from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -79,16 +127,25 @@ def main():
         print("    See /dnc:slack-bot for setup instructions.")
         raise SystemExit(1)
 
+    _startup_checks(bot_token, DNC_CHANNEL)
+
     app = App(token=bot_token)
 
     @app.event("message")
     def handle_message(event, client):
-        if event.get("subtype"):
-            return
-        if DNC_CHANNEL and event.get("channel") != DNC_CHANNEL:
+        channel_id = event.get("channel", "")
+        subtype    = event.get("subtype")
+        text       = event.get("text", "")
+        log.info(f"EVENT — channel={channel_id} subtype={subtype} text={repr(text)}")
+
+        if subtype:
             return
 
-        phones = extract_phones(event.get("text", ""))
+        if DNC_CHANNEL and channel_id != DNC_CHANNEL:
+            log.debug(f"Skipping — not the DNC channel ({channel_id})")
+            return
+
+        phones = extract_phones(text)
         if not phones:
             return
 
@@ -98,10 +155,11 @@ def main():
 
         try:
             client.reactions_add(
-                channel=event["channel"],
+                channel=channel_id,
                 timestamp=event["ts"],
                 name="white_check_mark" if all_ok else "x",
             )
+            log.info(f"Reacted {'✅' if all_ok else '❌'} to message in {channel_id}")
         except Exception as exc:
             log.warning(f"Could not add reaction: {exc}")
 
@@ -109,7 +167,7 @@ def main():
             failed = [p for p, ok in results.items() if not ok]
             try:
                 client.chat_postMessage(
-                    channel=event["channel"],
+                    channel=channel_id,
                     thread_ts=event["ts"],
                     text=f"⚠️ DNC failed for: {', '.join(failed)}",
                 )
