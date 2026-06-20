@@ -2,12 +2,14 @@ import os
 import httpx
 from datetime import date
 from dotenv import load_dotenv
+from checklists.heavy_khomp_qa import HEAVY_KHOMP_QA
 
 load_dotenv()
 
 NAME = "Outbound Heavy Khomp"
 PROVIDER_KEY = "heavy_khomp"
 API_URL = "https://leads.pipes.ai/api/lead"
+CHECKLIST = HEAVY_KHOMP_QA
 
 
 def trigger() -> dict:

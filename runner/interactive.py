@@ -17,7 +17,7 @@ from rich.rule import Rule
 from rich.text import Text
 from rich import box
 
-from checklists.daily_qa import DAILY_QA
+from checklists.daily_qa import DAILY_QA  # fallback checklist for unconfigured providers
 from runner.report import send_slack_report
 
 console = Console()
@@ -220,6 +220,9 @@ def _save_report(results: dict) -> Path:
 # ── Main run loop ──────────────────────────────────────────────────────────────
 
 def run_provider(provider, resume_data: dict | None = None) -> dict:
+    # Use the provider's own checklist if it has one, else the generic fallback
+    checklist = getattr(provider, "CHECKLIST", DAILY_QA)
+
     # Build a lookup of already-completed items from a resumed run
     completed: dict[str, dict] = {}
     if resume_data:
@@ -228,7 +231,7 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
                 completed[item["id"]] = item
 
     started_at   = datetime.fromisoformat(resume_data["started_at"]) if resume_data else datetime.now()
-    total_items  = sum(len(s.items) for s in DAILY_QA)
+    total_items  = sum(len(s.items) for s in checklist)
 
     console.print(Panel(
         f"[bold white]{provider.NAME}[/bold white]\n[dim]{started_at.strftime('%Y-%m-%d  %H:%M')}[/dim]",
@@ -246,7 +249,7 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
 
     item_num = 0
 
-    for sec_idx, section in enumerate(DAILY_QA):
+    for sec_idx, section in enumerate(checklist):
         sec_item_ids   = {item.id for item in section.items}
         already_done   = {iid for iid in sec_item_ids if iid in completed}
         sec_results    = {"title": section.title, "items": []}
@@ -260,14 +263,15 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
             console.print(f"\n[dim]  ↩  {section.title} — resumed ({len(sec_item_ids)} items)[/dim]")
             continue
 
-        console.print(f"\n[bold yellow][{sec_idx + 1}/{len(DAILY_QA)}]  {section.title}[/bold yellow]")
+        console.print(f"\n[bold yellow][{sec_idx + 1}/{len(checklist)}]  {section.title}[/bold yellow]")
         console.print(Rule(style="yellow dim"))
 
         if section.trigger_call_at_start:
             console.print()
             if already_done:
                 console.print(f"  [dim]Resuming — {len(already_done)} items already done. Triggering a new call for the rest.[/dim]")
-            answered = _trigger_and_wait(provider)
+            instruction = getattr(section, "start_instruction", "")
+            answered = _trigger_and_wait(provider, instruction=instruction)
             if not answered:
                 results["sections"].append(sec_results)
                 _save_progress(results)
