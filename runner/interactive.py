@@ -14,10 +14,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.rule import Rule
-from rich.text import Text
 from rich import box
 
-from checklists.daily_qa import DAILY_QA  # fallback checklist for unconfigured providers
+from checklists.daily_qa import DAILY_QA
 from runner.report import send_slack_report
 
 console = Console()
@@ -30,6 +29,15 @@ PROVIDERS = [
 ]
 
 REPORTS_DIR = Path("data/reports")
+
+
+# ── Input helper (fixes arrow-key escape sequences) ───────────────────────────
+
+def _input(prompt: str = "") -> str:
+    """Plain input() renders arrow-keys correctly; console.input() can bleed escape codes."""
+    if prompt:
+        console.print(prompt, end="")
+    return input().strip()
 
 
 # ── Progress / resume ──────────────────────────────────────────────────────────
@@ -59,15 +67,14 @@ def _clear_progress(provider_key: str):
         path.unlink()
 
 
-def _check_resume(provider_key: str) -> dict | None:
-    """If an incomplete run exists, ask the user whether to resume it."""
+def _check_resume(provider_key: str, checklist) -> dict | None:
     saved = _load_progress(provider_key)
     if not saved:
         return None
 
-    started = datetime.fromisoformat(saved["started_at"])
+    started   = datetime.fromisoformat(saved["started_at"])
     completed = sum(len(s["items"]) for s in saved.get("sections", []))
-    total     = sum(len(s.items) for s in DAILY_QA)
+    total     = sum(len(s.items) for s in checklist)
 
     console.print(Panel(
         f"[yellow]Incomplete run found[/yellow]\n"
@@ -76,7 +83,8 @@ def _check_resume(provider_key: str) -> dict | None:
         padding=(1, 4),
     ))
 
-    resp = console.input("  [bold](R)[/bold] Resume where you left off   [bold](N)[/bold] Start fresh  → ").strip().lower()
+    console.print("  [bold](R)[/bold] Resume    [bold](N)[/bold] Start fresh")
+    resp = input("  → ").strip().lower()
     if resp == "r":
         console.print(f"  [green]Resuming from item {completed + 1}...[/green]\n")
         return saved
@@ -109,11 +117,12 @@ def _select_providers() -> list[dict]:
     active = [p for p in PROVIDERS if p["active"]]
 
     while True:
-        choice = console.input("\n  Select → ").strip().lower()
+        console.print("\n  Enter a number or [A] for all active:")
+        choice = input("  → ").strip().lower()
 
         if choice == "a":
             if not active:
-                console.print("  [red]No active providers. Run /qa:add-provider to configure one.[/red]")
+                console.print("  [red]No active providers.[/red]")
                 continue
             return active
 
@@ -122,11 +131,11 @@ def _select_providers() -> list[dict]:
             if 0 <= idx < len(PROVIDERS):
                 p = PROVIDERS[idx]
                 if not p["active"]:
-                    console.print(f"  [yellow]{p['name']} is not configured yet.[/yellow] Run [bold]/qa:add-provider[/bold].")
+                    console.print(f"  [yellow]{p['name']} is not configured yet.[/yellow]")
                     continue
                 return [p]
 
-        console.print("  [dim]Enter a number or A[/dim]")
+        console.print("  [dim]Enter a number (1–4) or A[/dim]")
 
 
 # ── Call trigger helpers ───────────────────────────────────────────────────────
@@ -135,7 +144,7 @@ def _trigger_call(provider) -> bool:
     with console.status("[bold cyan]Triggering outbound call...", spinner="dots"):
         try:
             result = provider.trigger()
-            console.print(f"  [green]✓[/green] Call triggered (HTTP {result['http_code']})")
+            console.print(f"  [green]✓[/green] Call triggered — HTTP {result['http_code']}")
             return True
         except Exception as e:
             console.print(f"  [red]✗[/red] Failed: {e}")
@@ -147,30 +156,24 @@ def _trigger_and_wait(provider, instruction: str = "") -> bool:
     Trigger a call and wait for the user to answer.
       ENTER  — on the call, continue
       R      — missed it, retrigger
-      S      — skip this item
+      S      — skip
     """
     while True:
         ok = _trigger_call(provider)
 
         if not ok:
-            resp = console.input(
-                "\n  Call failed.  [bold](R)[/bold] retry   [bold](S)[/bold] skip → "
-            ).strip().lower()
+            console.print("  Call failed.")
+            console.print("  [bold]R[/bold] Retry    [bold]S[/bold] Skip")
+            resp = input("  → ").strip().lower()
             if resp == "s":
                 return False
             continue
 
         if instruction:
-            console.print(f"\n  [bold white]  ▶  {instruction}[/bold white]")
+            console.print(f"\n  [bold white]▶  {instruction}[/bold white]")
 
-        console.print(
-            "\n  [dim]"
-            "[bold white][ENTER][/bold white] I'm on the call   "
-            "[bold white][R][/bold white] Missed it — retrigger   "
-            "[bold white][S][/bold white] Skip"
-            "[/dim]"
-        )
-        resp = console.input("  → ").strip().lower()
+        console.print("\n  [dim][ENTER] I'm on the call   [R] Retrigger   [S] Skip[/dim]")
+        resp = input("  → ").strip().lower()
 
         if resp == "r":
             console.print()
@@ -181,33 +184,39 @@ def _trigger_and_wait(provider, instruction: str = "") -> bool:
             return True
 
 
-# ── Checklist helpers ──────────────────────────────────────────────────────────
+# ── Pass/fail prompt ───────────────────────────────────────────────────────────
 
-def _ask(item_text: str, provider=None) -> tuple[bool, str]:
+def _ask(item_num: int, provider=None) -> tuple[bool, str]:
     """
-      y / Enter  — pass
-      n          — fail (prompts for a note)
-      r          — retrigger call, re-ask same item
+    Ask pass/fail.  Returns (passed, note).
+    Uses plain input() so arrow keys never bleed escape sequences.
+    Shows:   1 ✅   or   2 ❌   after answering.
     """
     while True:
-        resp = console.input(
-            "    [bold]Pass?[/bold]  [dim][y] pass   [n] fail   [r] retrigger[/dim]  → "
-        ).strip().lower()
+        console.print("\n  [dim]  1  Pass    2  Fail    3  Retrigger[/dim]")
+        resp = input("  → ").strip().lower()
 
-        if resp in ("y", "yes", ""):
+        if resp in ("1", "y", "yes", ""):
+            console.print(f"  [bold green]{item_num} ✅[/bold green]")
             return True, ""
-        elif resp in ("n", "no"):
-            note = console.input("    [dim]Failure note (Enter to skip): [/dim]").strip()
+
+        elif resp in ("2", "n", "no"):
+            note = input("  Note (Enter to skip): ").strip()
+            console.print(f"  [bold red]{item_num} ❌[/bold red]" + (f"  — {note}" if note else ""))
             return False, note
-        elif resp == "r":
+
+        elif resp in ("3", "r"):
             if provider:
                 console.print()
                 _trigger_and_wait(provider)
             else:
-                console.print("    [dim]No provider to retrigger.[/dim]")
-        else:
-            console.print("    [dim]y = pass   n = fail   r = retrigger[/dim]")
+                console.print("  [dim]No provider — can't retrigger.[/dim]")
 
+        else:
+            console.print("  [dim]1  Pass   2  Fail   3  Retrigger[/dim]")
+
+
+# ── Report save ────────────────────────────────────────────────────────────────
 
 def _save_report(results: dict) -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -220,18 +229,16 @@ def _save_report(results: dict) -> Path:
 # ── Main run loop ──────────────────────────────────────────────────────────────
 
 def run_provider(provider, resume_data: dict | None = None) -> dict:
-    # Use the provider's own checklist if it has one, else the generic fallback
     checklist = getattr(provider, "CHECKLIST", DAILY_QA)
 
-    # Build a lookup of already-completed items from a resumed run
     completed: dict[str, dict] = {}
     if resume_data:
         for sec in resume_data.get("sections", []):
             for item in sec.get("items", []):
                 completed[item["id"]] = item
 
-    started_at   = datetime.fromisoformat(resume_data["started_at"]) if resume_data else datetime.now()
-    total_items  = sum(len(s.items) for s in checklist)
+    started_at  = datetime.fromisoformat(resume_data["started_at"]) if resume_data else datetime.now()
+    total_items = sum(len(s.items) for s in checklist)
 
     console.print(Panel(
         f"[bold white]{provider.NAME}[/bold white]\n[dim]{started_at.strftime('%Y-%m-%d  %H:%M')}[/dim]",
@@ -250,11 +257,11 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
     item_num = 0
 
     for sec_idx, section in enumerate(checklist):
-        sec_item_ids   = {item.id for item in section.items}
-        already_done   = {iid for iid in sec_item_ids if iid in completed}
-        sec_results    = {"title": section.title, "items": []}
+        sec_item_ids = {item.id for item in section.items}
+        already_done = {iid for iid in sec_item_ids if iid in completed}
+        sec_results  = {"title": section.title, "items": []}
 
-        # Entire section already done — restore and skip
+        # Entire section already completed — restore and skip
         if already_done == sec_item_ids:
             for item in section.items:
                 item_num += 1
@@ -269,8 +276,8 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
         if section.trigger_call_at_start:
             console.print()
             if already_done:
-                console.print(f"  [dim]Resuming — {len(already_done)} items already done. Triggering a new call for the rest.[/dim]")
-            instruction = getattr(section, "start_instruction", "")
+                console.print(f"  [dim]Resuming — {len(already_done)} item(s) already done. Triggering a new call for the rest.[/dim]")
+            instruction = getattr(section, "start_instruction", "") or ""
             answered = _trigger_and_wait(provider, instruction=instruction)
             if not answered:
                 results["sections"].append(sec_results)
@@ -289,6 +296,7 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
                 sec_results["items"].append(saved)
                 continue
 
+            # Single-call item (trigger before this item specifically)
             if item.trigger_call:
                 console.print("  [cyan]📞  Triggering new call...[/cyan]")
                 answered = _trigger_and_wait(provider, instruction=item.call_instruction)
@@ -297,14 +305,30 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
                     console.print("  [dim]Skipped.[/dim]")
                     continue
 
+            # Show the item
             console.print(f"  [bold white][{item_num}/{total_items}][/bold white]  {item.text}")
             if item.note:
-                console.print(f"  [dim]        → {item.note}[/dim]")
+                console.print(f"  [dim]         → {item.note}[/dim]")
 
-            passed, note = _ask(item.text, provider=provider)
+            # Show sub-bullets (e.g. Account Used OB checks)
+            for bullet in getattr(item, "bullets", []):
+                console.print(f"  [dim]         • {bullet}[/dim]")
 
-            icon = "[green]✓ PASS[/green]" if passed else "[red]✗ FAIL[/red]"
-            console.print(f"        {icon}" + (f"  — {note}" if note else ""))
+            # Multi-call item (e.g. AMD Detection — 4 sequential calls, ONE pass/fail)
+            sub_calls = getattr(item, "sub_calls", [])
+            if sub_calls:
+                console.print(f"\n  [dim]This item has {len(sub_calls)} sequential call tests:[/dim]")
+                for sc_idx, sub in enumerate(sub_calls, 1):
+                    console.print()
+                    console.print(f"  [bold cyan]Test {sc_idx}/{len(sub_calls)}[/bold cyan]  {sub.instruction}")
+                    if sub.note:
+                        console.print(f"  [dim]         → {sub.note}[/dim]")
+                    answered = _trigger_and_wait(provider, instruction=sub.instruction)
+                    if not answered:
+                        console.print(f"  [dim]Skipped test {sc_idx}[/dim]")
+                console.print(f"\n  [dim]All {len(sub_calls)} tests done.[/dim]")
+
+            passed, note = _ask(item_num, provider=provider)
 
             sec_results["items"].append({"id": item.id, "text": item.text, "passed": passed, "note": note})
 
@@ -344,7 +368,7 @@ def run_provider(provider, resume_data: dict | None = None) -> dict:
     console.print(Panel(table, title=f"[bold {color}]  {summary}  [/bold {color}]", border_style=color))
 
     report_path = _save_report(results)
-    _clear_progress(provider.PROVIDER_KEY)   # run complete — clean up progress file
+    _clear_progress(provider.PROVIDER_KEY)
     console.print(f"  [dim]Report saved → {report_path}[/dim]")
 
     return results
@@ -369,7 +393,8 @@ def main():
 
     for entry in selected:
         provider    = importlib.import_module(entry["module"])
-        resume_data = _check_resume(entry["key"])
+        checklist   = getattr(provider, "CHECKLIST", DAILY_QA)
+        resume_data = _check_resume(entry["key"], checklist)
         results     = run_provider(provider, resume_data=resume_data)
 
         console.print()
@@ -384,4 +409,5 @@ def main():
                 console.print(f"[red]✗[/red] Slack send failed: {e}")
 
         if entry != selected[-1]:
-            console.input("\n[dim]Press [ENTER] to continue to the next provider...[/dim] ")
+            console.print("\n[dim]Press ENTER to continue to the next provider...[/dim]")
+            input()
