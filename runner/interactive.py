@@ -63,6 +63,15 @@ CHECKLISTS = [
         "default_provider": "sms_ai_signalmash",
         "active":           True,
     },
+    {
+        "key":              "hourly-heavy-khomp",
+        "name":             "Hourly Monitoring QA — Heavy Khomp",
+        "desc":             "9 items · all providers",
+        "module":           "checklists.hourly_heavy_khomp_qa",
+        "attr":             "HOURLY_HEAVY_KHOMP_QA",
+        "default_provider": "heavy_khomp",
+        "active":           True,
+    },
 ]
 
 # ── Provider registry ──────────────────────────────────────────────────────────
