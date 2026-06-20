@@ -114,4 +114,116 @@ HEAVY_KHOMP_QA: list[Section] = [
             ),
         ],
     ),
+
+    # ── 6/9  TBI Khomp OB & IB  ───────────────────── items 12–14/23 ───
+    Section(
+        id="tbi_khomp",
+        title="6/9  Outbound & Inbound — TBI Khomp",
+        trigger_call_at_start=True,
+        start_instruction="Answer your Google Voice — TBI Khomp call should connect.",
+        provider_key="tbi_khomp",
+        items=[
+            CheckItem(
+                id="tbi_khomp_transfer",
+                text="Transfer to a Call Destination OB & IB",
+                provider_key="tbi_khomp",
+            ),
+            CheckItem(
+                id="tbi_khomp_schedule",
+                text="Scheduling Call OB & IB",
+                note="Schedule a call and verify it appears in the system.",
+                provider_key="tbi_khomp",
+            ),
+            CheckItem(
+                id="tbi_khomp_dnc",
+                text="DNC OB & IB",
+                note="Make sure phone number is suppressed then remove from suppression.",
+                provider_key="tbi_khomp",
+            ),
+        ],
+    ),
+
+    # ── 7/9  TBI Freeswitch OB & IB  ──────────────── items 15–17/23 ───
+    Section(
+        id="tbi_fs",
+        title="7/9  Outbound & Inbound — TBI Freeswitch",
+        trigger_call_at_start=True,
+        start_instruction="Answer your Google Voice — TBI Freeswitch call should connect.",
+        provider_key="tbi_fs",
+        items=[
+            CheckItem(
+                id="tbi_fs_transfer",
+                text="Transfer to a Call Destination OB & IB",
+                provider_key="tbi_fs",
+            ),
+            CheckItem(
+                id="tbi_fs_schedule",
+                text="Scheduling Call OB & IB",
+                note="Schedule a call and verify it appears in the system.",
+                provider_key="tbi_fs",
+            ),
+            CheckItem(
+                id="tbi_fs_dnc",
+                text="DNC OB & IB",
+                note="Make sure phone number is suppressed then remove from suppression.",
+                provider_key="tbi_fs",
+            ),
+        ],
+    ),
+
+    # ── 8/9  Signalmash Khomp OB & IB  ────────────── items 18–20/23 ───
+    Section(
+        id="signalmash_khomp",
+        title="8/9  Outbound & Inbound — Signalmash Khomp",
+        trigger_call_at_start=True,
+        start_instruction="Answer your Google Voice — Signalmash Khomp call should connect.",
+        provider_key="signalmash_khomp",
+        items=[
+            CheckItem(
+                id="sig_khomp_transfer",
+                text="Transfer to a Call Destination OB & IB",
+                provider_key="signalmash_khomp",
+            ),
+            CheckItem(
+                id="sig_khomp_schedule",
+                text="Scheduling Call OB & IB",
+                note="Schedule a call and verify it appears in the system.",
+                provider_key="signalmash_khomp",
+            ),
+            CheckItem(
+                id="sig_khomp_dnc",
+                text="DNC OB & IB",
+                note="Make sure phone number is suppressed then remove from suppression.",
+                provider_key="signalmash_khomp",
+            ),
+        ],
+    ),
+
+    # ── 9/9  Signalmash Freeswitch OB & IB  ───────── items 21–23/23 ───
+    Section(
+        id="signalmash_fs",
+        title="9/9  Outbound & Inbound — Signalmash Freeswitch",
+        trigger_call_at_start=True,
+        start_instruction="Answer your Google Voice — Signalmash Freeswitch call should connect.",
+        provider_key="signalmash_fs",
+        items=[
+            CheckItem(
+                id="sig_fs_transfer",
+                text="Transfer to a Call Destination OB & IB",
+                provider_key="signalmash_fs",
+            ),
+            CheckItem(
+                id="sig_fs_schedule",
+                text="Scheduling Call OB & IB",
+                note="Schedule a call and verify it appears in the system.",
+                provider_key="signalmash_fs",
+            ),
+            CheckItem(
+                id="sig_fs_dnc",
+                text="DNC OB & IB",
+                note="Make sure phone number is suppressed then remove from suppression.",
+                provider_key="signalmash_fs",
+            ),
+        ],
+    ),
 ]

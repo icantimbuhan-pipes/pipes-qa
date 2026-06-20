@@ -31,7 +31,7 @@ CHECKLISTS = [
     {
         "key":              "daily-heavy-khomp",
         "name":             "Daily QA — Heavy Khomp",
-        "desc":             "11 items · 5 sections",
+        "desc":             "23 items · 9 sections",
         "module":           "checklists.heavy_khomp_qa",
         "attr":             "HEAVY_KHOMP_QA",
         "default_provider": "heavy_khomp",
