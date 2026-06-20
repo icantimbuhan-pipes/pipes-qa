@@ -394,7 +394,7 @@ def main():
     for entry in selected:
         provider    = importlib.import_module(entry["module"])
         checklist   = getattr(provider, "CHECKLIST", DAILY_QA)
-        resume_data = _check_resume(entry["key"], checklist)
+        resume_data = _check_resume(provider.PROVIDER_KEY, checklist)
         results     = run_provider(provider, resume_data=resume_data)
 
         console.print()
