@@ -18,6 +18,7 @@ from rich import box
 
 from checklists.daily_qa import DAILY_QA
 from runner.report import send_slack_report
+from runner.monitoring import run_monitoring_form
 
 console = Console()
 
@@ -396,6 +397,9 @@ def main():
         checklist   = getattr(provider, "CHECKLIST", DAILY_QA)
         resume_data = _check_resume(provider.PROVIDER_KEY, checklist)
         results     = run_provider(provider, resume_data=resume_data)
+
+        # Monitoring form — fills in carrier statuses, latency, errors, etc.
+        results["monitoring"] = run_monitoring_form()
 
         console.print()
         with console.status("[dim]Sending Slack report...[/dim]", spinner="dots"):
