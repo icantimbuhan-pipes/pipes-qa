@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/iccantimbuhangmail.com/.claude/commands/ 2>/dev/null || echo \"no commands dir yet\")",
+      "Read(//Users/iccantimbuhangmail.com/.claude/**)",
+      "Bash(mkdir -p \\\\ *)"
+    ],
+    "additionalDirectories": [
+      "/Users/iccantimbuhangmail.com/Pipes.QA/.claude/commands"
+    ]
+  }
+}

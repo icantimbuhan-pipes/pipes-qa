@@ -1,0 +1,43 @@
+name: Daily QA Monitor
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-5"   # 9 AM Mon–Fri (UTC) — adjust to your timezone
+  workflow_dispatch:          # also triggerable manually from GitHub UI
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run QA (non-interactive — Slack report only)
+        env:
+          HEAVY_KHOMP_API_KEY: ${{ secrets.HEAVY_KHOMP_API_KEY }}
+          QA_PHONE_NUMBER: ${{ secrets.QA_PHONE_NUMBER }}
+          QA_IP_ADDRESS: ${{ secrets.QA_IP_ADDRESS }}
+          QA_EMAIL: ${{ secrets.QA_EMAIL }}
+          QA_JORNAYA_LEADID: ${{ secrets.QA_JORNAYA_LEADID }}
+          QA_POSTAL_CODE: ${{ secrets.QA_POSTAL_CODE }}
+          QA_STATE: ${{ secrets.QA_STATE }}
+          QA_FIRST_NAME: ${{ secrets.QA_FIRST_NAME }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        # NOTE: This triggers the calls but can't do manual y/n.
+        # Use for automated call-trigger + Slack alert only.
+        # For full interactive QA, run locally with: uv run python -m runner
+        run: uv run python -c "
+          from providers import heavy_khomp
+          result = heavy_khomp.trigger()
+          print(result)
+        "
