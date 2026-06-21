@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Maintenance — Pipes.QA Portal{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Dashboard</a>
+</div>
+
+<div class="page-header">
+  <h1>Maintenance</h1>
+  <p>Configure API keys, test providers, and manage all parameters from one place. Changes are written directly to your <code style="font-family:var(--mono); font-size:12px; background:rgba(255,255,255,.07); padding:1px 6px; border-radius:4px;">.env</code> file.</p>
+</div>
+
+<style>
+  .field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(42,45,58,.5);
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .field-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .field-input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 8px 10px;
+    font-size: 13px; font-family: var(--mono); width: 100%;
+  }
+  .field-input:focus { outline: none; border-color: var(--accent); }
+  .field-input.is-set { border-color: rgba(74,222,128,.3); }
+  .clear-btn {
+    padding: 4px 8px; border-radius: 5px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); font-size: 11px;
+    cursor: pointer; white-space: nowrap; transition: all .15s; flex-shrink: 0;
+  }
+  .clear-btn:hover { border-color: var(--red-border); color: var(--red); background: var(--red-bg); }
+
+  @media (min-width: 640px) {
+    .field-row {
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+    }
+    .field-label { min-width: 160px; flex-shrink: 0; }
+    .field-top { display: contents; }
+  }
+
+  details { margin-bottom: 10px; }
+  details > summary {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; cursor: pointer; list-style: none;
+    transition: background .15s;
+    user-select: none;
+  }
+  details[open] > summary { border-radius: 10px 10px 0 0; border-bottom: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary:hover { background: var(--surface2); }
+  .details-body {
+    background: var(--surface); border: 1px solid var(--border);
+    border-top: none; border-radius: 0 0 10px 10px;
+    padding: 16px 18px;
+  }
+  .chevron { transition: transform .2s; font-size: 11px; color: var(--text-muted); margin-left: auto; }
+  details[open] .chevron { transform: rotate(90deg); }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .dot-active       { background: var(--green); box-shadow: 0 0 6px rgba(74,222,128,.5); }
+  .dot-partial      { background: var(--yellow); }
+  .dot-unconfigured { background: var(--text-muted); }
+
+  .test-btn {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); font-size: 12px;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .test-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .test-result {
+    margin-top: 10px; padding: 10px 14px; border-radius: 7px;
+    font-size: 12px; font-family: var(--mono); border: 1px solid;
+    display: none; word-break: break-all;
+  }
+  .test-result.ok  { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
+  .test-result.err { background: var(--red-bg);   border-color: var(--red-border);   color: var(--red); }
+</style>
+
+{# ── Global Settings ── #}
+<h2 style="font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+           color:var(--text-muted); margin-bottom:10px;">Global Settings</h2>
+
+<div class="card" style="margin-bottom:28px;">
+  <form method="post" action="{{ url_for('maintenance.save_global') }}">
+    {% for p in shared_params %}
+    <div class="field-row">
+      <div class="field-top">
+        <label class="field-label" for="g_{{ p.env }}">
+          {{ p.label }}{% if p.required %} <span style="color:var(--red);">*</span>{% endif %}
+        </label>
+      </div>
+      <input
+        id="g_{{ p.env }}"
+        name="{{ p.env }}"
+        type="{{ p.type }}"
+        class="field-input {% if env.get(p.env) %}is-set{% endif %}"
+        value="{{ env.get(p.env, '') }}"
+        placeholder="{{ p.placeholder }}"
+        autocomplete="off"
+      >
+    </div>
+    {% endfor %}
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary" style="font-size:13px;">Save Global Settings</button>
+    </div>
+  </form>
+</div>
+
+{# ── Providers ── #}
+<h2 style="font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+           color:var(--text-muted); margin-bottom:10px;">
+  API Providers
+  <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted); font-size:12px; margin-left:6px;">
+    ({{ providers | selectattr('status', 'eq', 'active') | list | length }} / {{ providers | length }} configured)
+  </span>
+</h2>
+
+{% for provider in providers %}
+<details id="provider-{{ provider.key }}"
+         {% if provider.status != 'active' %}open{% endif %}>
+
+  <summary>
+    <span class="status-dot dot-{{ provider.status }}"></span>
+    <span style="font-size:14px; font-weight:600;">{{ provider.name }}</span>
+    <span style="font-size:11px; color:var(--text-muted);">
+      {% if provider.status == 'active' %}Active{% elif provider.status == 'partial' %}Partial{% else %}Not Configured{% endif %}
+    </span>
+    <button type="button" class="test-btn" style="margin-left:auto;"
+            onclick="event.preventDefault(); testProvider('{{ provider.key }}', this)">
+      ⚡ Test Call
+    </button>
+    <span class="chevron">›</span>
+  </summary>
+
+  <div class="details-body">
+    <div id="test-result-{{ provider.key }}" class="test-result"></div>
+
+    <form method="post" action="{{ url_for('maintenance.save_provider', key=provider.key) }}">
+      {% for p in provider.params %}
+      <div class="field-row">
+        <div class="field-top">
+          <label class="field-label" for="{{ provider.key }}_{{ p.env }}">
+            {{ p.label }}{% if p.required %} <span style="color:var(--red);">*</span>{% endif %}
+          </label>
+          {% if env.get(p.env) %}
+            <form method="post"
+                  action="{{ url_for('maintenance.clear_env', key=provider.key, env_var=p.env) }}">
+              <button type="submit" class="clear-btn">✕ Clear</button>
+            </form>
+          {% endif %}
+        </div>
+        <input
+          id="{{ provider.key }}_{{ p.env }}"
+          name="{{ p.env }}"
+          type="{{ p.type }}"
+          class="field-input {% if env.get(p.env) %}is-set{% endif %}"
+          value="{{ env.get(p.env, p.get('default', '')) }}"
+          placeholder="{{ p.get('default', '') }}"
+          autocomplete="off"
+        >
+      </div>
+      {% endfor %}
+
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <button type="submit" class="btn btn-primary" style="font-size:13px;">Save {{ provider.name }}</button>
+      </div>
+    </form>
+  </div>
+
+</details>
+{% endfor %}
+
+<script>
+  async function testProvider(key, btn) {
+    const resultEl = document.getElementById('test-result-' + key);
+    btn.disabled = true;
+    btn.textContent = '⏳ Calling…';
+    resultEl.style.display = 'none';
+    resultEl.className = 'test-result';
+
+    try {
+      const res  = await fetch(`/maintenance/provider/${key}/test`, { method: 'POST' });
+      const data = await res.json();
+      resultEl.style.display = 'block';
+      if (data.ok) {
+        resultEl.classList.add('ok');
+        resultEl.textContent = '✓ Call triggered — ' + JSON.stringify(data.result);
+        btn.textContent = '✓ Sent';
+      } else {
+        resultEl.classList.add('err');
+        resultEl.textContent = '✗ ' + (data.error || 'Unknown error');
+        btn.textContent = '⚡ Test Call';
+        btn.disabled = false;
+      }
+    } catch (e) {
+      resultEl.style.display = 'block';
+      resultEl.classList.add('err');
+      resultEl.textContent = '✗ Network error — ' + e.message;
+      btn.textContent = '⚡ Test Call';
+      btn.disabled = false;
+    }
+  }
+
+  // Preserve open state on reload via hash
+  document.addEventListener('DOMContentLoaded', () => {
+    const hash = location.hash.replace('#', '');
+    if (hash) {
+      const el = document.getElementById(hash);
+      if (el && el.tagName === 'DETAILS') el.open = true;
+    }
+  });
+</script>
+
+{% endblock %}

@@ -4,15 +4,16 @@
 
 {% block content %}
 
-{# ── Progress ── #}
+{# ── Back + Progress ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+  <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Back</a>
+  <span style="font-size:12px; color:var(--text-muted);">{{ session['checklist_name'] }}</span>
+</div>
+
 <div style="margin-bottom:28px;">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-    <span style="font-size:12px; color:var(--text-muted);">
-      <a href="{{ url_for('daily_qa.pick') }}" style="color:var(--text-muted); text-decoration:none;">Daily QA</a>
-      <span style="margin:0 6px;">›</span>
-      <span style="color:var(--text);">{{ session['checklist_name'] }}</span>
-    </span>
-    <span style="font-size:12px; color:var(--text-muted); font-family:var(--mono);">{{ item_num + 1 }} / {{ total }}</span>
+    <span style="font-size:12px; color:var(--text-muted);">Step {{ item_num + 1 }} of {{ total }}</span>
+    <span style="font-size:12px; color:var(--text-muted); font-family:var(--mono);">{{ answered }} answered</span>
   </div>
   <div class="progress-wrap">
     <div class="progress-bar" style="width:{{ ((item_num) / total * 100) | round(1) }}%"></div>

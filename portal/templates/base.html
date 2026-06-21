@@ -42,7 +42,7 @@
     nav {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 0 24px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -50,7 +50,11 @@
       position: sticky;
       top: 0;
       z-index: 100;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    nav::-webkit-scrollbar { display: none; }
     .nav-brand {
       font-size: 13px;
       font-weight: 700;
@@ -60,30 +64,38 @@
       display: flex;
       align-items: center;
       gap: 7px;
+      flex-shrink: 0;
     }
     .nav-brand-dot {
       width: 7px; height: 7px;
       border-radius: 50%;
       background: var(--accent);
     }
-    .nav-sep { color: var(--border); margin: 0 4px; }
-    .nav-links { margin-left: auto; display: flex; gap: 2px; align-items: center; }
-    .nav-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; }
+    .nav-sep { color: var(--border); margin: 0 4px; flex-shrink: 0; }
+    .nav-links { margin-left: auto; display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+    .nav-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
     .nav-link {
-      padding: 6px 12px;
+      padding: 6px 10px;
       border-radius: 6px;
       text-decoration: none;
       color: var(--text-muted);
       font-size: 13px;
       transition: background .15s, color .15s;
       white-space: nowrap;
+      flex-shrink: 0;
     }
     .nav-link:hover { background: var(--accent-dim); color: var(--text); }
     .nav-link.active { background: var(--accent-dim); color: var(--accent); font-weight: 500; }
 
     /* ── Page ── */
-    .page { max-width: 1100px; margin: 0 auto; padding: 36px 24px; }
-    .page-sm { max-width: 700px; margin: 0 auto; padding: 36px 24px; }
+    .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    .page-sm { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
+
+    @media (min-width: 640px) {
+      nav { padding: 0 24px; }
+      .page { padding: 36px 24px; }
+      .page-sm { padding: 36px 24px; }
+    }
     .page-header { margin-bottom: 28px; }
     .page-header h1 { font-size: 22px; font-weight: 700; }
     .page-header p { color: var(--text-muted); margin-top: 5px; font-size: 13px; }
@@ -196,6 +208,9 @@
        href="{{ url_for('daily_qa.pick', preset='hourly-heavy-khomp') }}">Hourly QA</a>
     <div class="nav-divider"></div>
     <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}" href="/upload">SMS</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('maintenance.') %}active{% endif %}"
+       href="{{ url_for('maintenance.index') }}">⚙ Maintenance</a>
   </div>
 </nav>
 

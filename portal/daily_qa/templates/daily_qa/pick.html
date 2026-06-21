@@ -2,6 +2,10 @@
 {% block title %}Pick Checklist — Daily QA{% endblock %}
 
 {% block content %}
+<div style="margin-bottom:20px;">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Dashboard</a>
+</div>
+
 <div class="page-header">
   <h1>Daily QA</h1>
   <p>Choose a checklist to begin. Your progress is saved — you can resume if interrupted.</p>
