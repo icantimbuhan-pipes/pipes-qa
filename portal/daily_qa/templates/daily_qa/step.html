@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Step {{ item_num + 1 }} — {{ session['checklist_name'] }}{% endblock %}
+{% block page_class %}page-sm{% endblock %}
+
+{% block content %}
+
+{# ── Progress ── #}
+<div style="margin-bottom:28px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+    <span style="font-size:12px; color:var(--text-muted);">
+      <a href="{{ url_for('daily_qa.pick') }}" style="color:var(--text-muted); text-decoration:none;">Daily QA</a>
+      <span style="margin:0 6px;">›</span>
+      <span style="color:var(--text);">{{ session['checklist_name'] }}</span>
+    </span>
+    <span style="font-size:12px; color:var(--text-muted); font-family:var(--mono);">{{ item_num + 1 }} / {{ total }}</span>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar" style="width:{{ ((item_num) / total * 100) | round(1) }}%"></div>
+  </div>
+</div>
+
+{# ── Section label ── #}
+<div style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+            color:var(--accent); margin-bottom:10px;">
+  {{ item.section_title }}
+</div>
+
+{# ── Call trigger (section-level, first item in section) ── #}
+{% if item.is_first_in_section and item.section_trigger_call and item.section_instruction %}
+<div id="trigger-section" style="
+  background: rgba(91,106,240,.07); border: 1px solid rgba(91,106,240,.2);
+  border-radius:10px; padding:16px; margin-bottom:20px;
+">
+  <div style="display:flex; align-items:flex-start; gap:12px;">
+    <span style="font-size:20px; margin-top:1px;">📞</span>
+    <div style="flex:1;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:4px;">Trigger a call before this section</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">{{ item.section_instruction }}</div>
+      <button type="button" class="btn btn-primary" style="font-size:13px;"
+              onclick="triggerCall('{{ provider_key }}', this, 'section')">
+        📞 Trigger Call
+      </button>
+      <span id="trigger-section-status" style="margin-left:12px; font-size:12px; color:var(--text-muted);"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Call trigger (item-level) ── #}
+{% if item.item_trigger_call and item.item_call_instruction %}
+<div style="
+  background: rgba(91,106,240,.07); border: 1px solid rgba(91,106,240,.2);
+  border-radius:10px; padding:16px; margin-bottom:20px;
+">
+  <div style="display:flex; align-items:flex-start; gap:12px;">
+    <span style="font-size:20px; margin-top:1px;">📞</span>
+    <div style="flex:1;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:4px;">Trigger a call for this item</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">{{ item.item_call_instruction }}</div>
+      <button type="button" class="btn btn-primary" style="font-size:13px;"
+              onclick="triggerCall('{{ provider_key }}', this, 'item')">
+        📞 Trigger Call
+      </button>
+      <span id="trigger-item-status" style="margin-left:12px; font-size:12px; color:var(--text-muted);"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Sub-calls (AMD Detection etc.) ── #}
+{% if item.item_sub_calls %}
+<div style="margin-bottom:20px;">
+  <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+    This item has {{ item.item_sub_calls|length }} sequential call tests:
+  </div>
+  {% for sc in item.item_sub_calls %}
+  <div style="
+    background: rgba(91,106,240,.04); border: 1px solid var(--border);
+    border-radius:8px; padding:14px; margin-bottom:8px;
+  ">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+      <div>
+        <div style="font-size:12px; font-weight:600; color:var(--accent); margin-bottom:4px;">
+          Test {{ loop.index }} / {{ item.item_sub_calls|length }}
+        </div>
+        <div style="font-size:13px; color:var(--text);">{{ sc.instruction }}</div>
+        {% if sc.note %}
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">→ {{ sc.note }}</div>
+        {% endif %}
+      </div>
+      <button type="button" class="btn btn-ghost" style="font-size:12px; white-space:nowrap;"
+              onclick="triggerCall('{{ provider_key }}', this, 'sub{{ loop.index }}')">
+        📞 Call
+      </button>
+    </div>
+    <span id="trigger-sub{{ loop.index }}-status" style="font-size:11px; color:var(--text-muted); margin-top:6px; display:block;"></span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Item card ── #}
+<div class="card" style="margin-bottom:24px;">
+  <div style="font-size:18px; font-weight:600; line-height:1.4; margin-bottom:{% if item.item_note or item.item_bullets %}14px{% else %}0{% endif %};">
+    {{ item.item_text }}
+  </div>
+  {% if item.item_note %}
+    <div style="font-size:13px; color:var(--text-muted); margin-bottom:{% if item.item_bullets %}10px{% else %}0{% endif %};">
+      → {{ item.item_note }}
+    </div>
+  {% endif %}
+  {% if item.item_bullets %}
+    <ul style="list-style:none; padding:0; margin:0;">
+      {% for b in item.item_bullets %}
+      <li style="font-size:13px; color:var(--text-muted); padding:3px 0; padding-left:14px; position:relative;">
+        <span style="position:absolute; left:0; color:var(--accent);">•</span>{{ b }}
+      </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+{# ── Answer form ── #}
+<form method="post" action="{{ url_for('daily_qa.answer', session_id=session['id'], n=item_num) }}" id="answer-form">
+
+  {# Pass / Fail buttons #}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+    <button type="button" id="btn-pass" onclick="select('pass')"
+            class="btn" style="
+              justify-content:center; padding:16px;
+              font-size:16px; font-weight:600;
+              border: 2px solid var(--border);
+              background: transparent; color: var(--text-muted);
+              border-radius:10px; transition: all .15s;
+            ">
+      ✓ Pass
+    </button>
+    <button type="button" id="btn-fail" onclick="select('fail')"
+            class="btn" style="
+              justify-content:center; padding:16px;
+              font-size:16px; font-weight:600;
+              border: 2px solid var(--border);
+              background: transparent; color: var(--text-muted);
+              border-radius:10px; transition: all .15s;
+            ">
+      ✗ Fail
+    </button>
+  </div>
+
+  {# Note field (revealed on Fail) #}
+  <div id="note-field" style="display:none; margin-bottom:16px;">
+    <label for="note">Note <span style="font-weight:400; color:var(--text-muted);">(describe the issue)</span></label>
+    <textarea name="note" id="note" rows="3" placeholder="What went wrong?"></textarea>
+  </div>
+
+  <input type="hidden" name="passed" id="passed-input" value="">
+
+  <button type="submit" id="submit-btn" class="btn btn-primary" style="width:100%; justify-content:center; display:none;">
+    Submit →
+  </button>
+
+</form>
+
+<style>
+  .btn-pass-active {
+    background: var(--green-bg) !important;
+    border-color: var(--green-border) !important;
+    color: var(--green) !important;
+  }
+  .btn-fail-active {
+    background: var(--red-bg) !important;
+    border-color: var(--red-border) !important;
+    color: var(--red) !important;
+  }
+</style>
+
+<script>
+  function select(choice) {
+    const passBtn  = document.getElementById('btn-pass');
+    const failBtn  = document.getElementById('btn-fail');
+    const noteDiv  = document.getElementById('note-field');
+    const hidInput = document.getElementById('passed-input');
+    const subBtn   = document.getElementById('submit-btn');
+
+    passBtn.classList.remove('btn-pass-active');
+    failBtn.classList.remove('btn-fail-active');
+
+    if (choice === 'pass') {
+      passBtn.classList.add('btn-pass-active');
+      hidInput.value = '1';
+      noteDiv.style.display = 'none';
+    } else {
+      failBtn.classList.add('btn-fail-active');
+      hidInput.value = '0';
+      noteDiv.style.display = 'block';
+      document.getElementById('note').focus();
+    }
+    subBtn.style.display = 'flex';
+  }
+
+  async function triggerCall(providerKey, btn, label) {
+    const statusId = 'trigger-' + label + '-status';
+    const statusEl = document.getElementById(statusId);
+    btn.disabled = true;
+    btn.textContent = '⏳ Triggering…';
+    if (statusEl) statusEl.textContent = '';
+
+    try {
+      const res = await fetch('{{ url_for("daily_qa.trigger_call") }}', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ provider_key: providerKey }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        btn.textContent = '✓ Call Sent';
+        btn.style.background = 'var(--green-bg)';
+        btn.style.borderColor = 'var(--green-border)';
+        btn.style.color = 'var(--green)';
+        if (statusEl) {
+          statusEl.textContent = 'Call triggered — answer your phone.';
+          statusEl.style.color = 'var(--green)';
+        }
+      } else {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+        if (statusEl) {
+          statusEl.textContent = data.error || 'Unknown error';
+          statusEl.style.color = 'var(--red)';
+        }
+      }
+    } catch (e) {
+      btn.textContent = '📞 Trigger Call';
+      btn.disabled = false;
+      if (statusEl) {
+        statusEl.textContent = 'Network error — try again.';
+        statusEl.style.color = 'var(--red)';
+      }
+    }
+  }
+</script>
+
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Pick Checklist — Daily QA{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Daily QA</h1>
+  <p>Choose a checklist to begin. Your progress is saved — you can resume if interrupted.</p>
+</div>
+
+{# ── Checklist cards ── #}
+<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-bottom:40px;">
+  {% for cl in checklists %}
+  {% if cl.active %}
+  <div class="card" style="
+    display:flex; flex-direction:column; gap:14px;
+    {% if preset == cl.key %}border-color: var(--accent);{% endif %}
+  ">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+      <div>
+        <div style="font-size:15px; font-weight:600; margin-bottom:4px;">{{ cl.name }}</div>
+        <div style="font-size:12px; color:var(--text-muted);">{{ cl.desc }}</div>
+      </div>
+      {% if cl.get('report_type') == 'hourly' %}
+        <span class="badge badge-blue" style="white-space:nowrap; margin-top:2px;">Hourly</span>
+      {% else %}
+        <span class="badge badge-pass" style="white-space:nowrap; margin-top:2px;">Daily</span>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('daily_qa.start') }}" style="margin-top:auto;">
+      <input type="hidden" name="checklist_key" value="{{ cl.key }}">
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">
+        Start →
+      </button>
+    </form>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+
+{# ── Recent sessions ── #}
+{% if recent %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+  <h2 style="font-size:14px; font-weight:600; color:var(--text-muted); letter-spacing:.04em; text-transform:uppercase;">Recent Runs</h2>
+</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Checklist</th>
+        <th>Started</th>
+        <th>Status</th>
+        <th>Slack</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+      <tr>
+        <td style="font-weight:500;">{{ r['checklist_name'] }}</td>
+        <td class="mono" style="font-size:12px; color:var(--text-muted);">{{ r['started_at'][:16].replace('T',' ') }}</td>
+        <td>
+          {% if not r['finished_at'] %}
+            <span class="badge badge-pending">In Progress</span>
+          {% elif r['report_type'] == 'hourly' %}
+            <span class="badge badge-blue">Hourly</span>
+          {% else %}
+            <span class="badge badge-pass">Done</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r['slack_sent'] %}
+            <span style="color:var(--green); font-size:12px;">✓</span>
+          {% else %}
+            <span style="color:var(--text-muted); font-size:12px;">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if not r['finished_at'] %}
+            <a href="{{ url_for('daily_qa.step', session_id=r['id'], n=0) }}"
+               style="font-size:12px; color:var(--yellow); text-decoration:none;">Resume →</a>
+          {% else %}
+            <a href="{{ url_for('daily_qa.summary', session_id=r['id']) }}"
+               style="font-size:12px; color:var(--accent); text-decoration:none;">View →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

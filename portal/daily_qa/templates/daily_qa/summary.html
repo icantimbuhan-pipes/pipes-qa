@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Summary — {{ session['checklist_name'] }}{% endblock %}
+
+{% block content %}
+
+{# ── Header ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+  <div>
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+      <a href="{{ url_for('daily_qa.pick') }}" style="color:var(--text-muted); text-decoration:none;">Daily QA</a>
+      <span style="margin:0 6px;">›</span>
+      {{ session['checklist_name'] }}
+    </div>
+    <h1 style="font-size:22px; font-weight:700;">
+      {% if in_progress %}
+        QA In Progress
+      {% elif all_good %}
+        ✅ All Passed
+      {% else %}
+        ⚠️ {{ passed }} / {{ total_items }} Passed
+      {% endif %}
+    </h1>
+    <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">
+      Started {{ session['started_at'][:16].replace('T',' ') }}
+      {% if session['finished_at'] %}
+        · Finished {{ session['finished_at'][:16].replace('T',' ') }}
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    {% if in_progress %}
+      <a href="{{ url_for('daily_qa.step', session_id=session['id'], n=next_n) }}"
+         class="btn btn-primary">Resume →</a>
+    {% else %}
+      {% if not session['slack_sent'] %}
+        <form method="post" action="{{ url_for('daily_qa.send_slack', session_id=session['id']) }}">
+          <button type="submit" class="btn btn-success">📤 Send to Slack</button>
+        </form>
+      {% else %}
+        <span class="btn btn-ghost" style="cursor:default; color:var(--green); border-color:var(--green-border);">
+          ✓ Slack Sent
+        </span>
+        <form method="post" action="{{ url_for('daily_qa.send_slack', session_id=session['id']) }}">
+          <button type="submit" class="btn btn-ghost" style="font-size:12px;">Resend</button>
+        </form>
+      {% endif %}
+      <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-ghost">New Run</a>
+    {% endif %}
+  </div>
+</div>
+
+{# ── KPI strip ── #}
+<div style="display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap;">
+  <div class="card" style="padding:14px 20px; flex:1; min-width:120px;">
+    <div style="font-size:24px; font-weight:700;">{{ total }}</div>
+    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Answered</div>
+  </div>
+  <div class="card" style="padding:14px 20px; flex:1; min-width:120px;">
+    <div style="font-size:24px; font-weight:700; color:var(--green);">{{ passed }}</div>
+    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Passed</div>
+  </div>
+  <div class="card" style="padding:14px 20px; flex:1; min-width:120px;">
+    <div style="font-size:24px; font-weight:700; color:{% if (total - passed) > 0 %}var(--red){% else %}var(--text-muted){% endif %};">
+      {{ total - passed }}
+    </div>
+    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Failed</div>
+  </div>
+  <div class="card" style="padding:14px 20px; flex:1; min-width:120px;">
+    <div style="font-size:24px; font-weight:700; color:{% if total_items - total > 0 %}var(--yellow){% else %}var(--text-muted){% endif %};">
+      {{ total_items - total }}
+    </div>
+    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Remaining</div>
+  </div>
+</div>
+
+{# ── Section breakdown ── #}
+{% if sections %}
+<h2 style="font-size:15px; font-weight:600; margin-bottom:14px;">Section Breakdown</h2>
+<div style="display:flex; flex-direction:column; gap:12px; margin-bottom:32px;">
+  {% for section_title, items in sections.items() %}
+  {% set sec_passed = items | selectattr('passed') | list | length %}
+  {% set sec_total  = items | length %}
+  <div class="card" style="padding:16px 20px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:{% if items | rejectattr('passed') | list %}12px{% else %}0{% endif %};">
+      <div style="font-size:13px; font-weight:600;">{{ section_title }}</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:12px; color:var(--text-muted); font-family:var(--mono);">{{ sec_passed }} / {{ sec_total }}</span>
+        {% if sec_passed == sec_total %}
+          <span class="badge badge-pass">All pass</span>
+        {% elif sec_passed == 0 %}
+          <span class="badge badge-fail">All fail</span>
+        {% else %}
+          <span class="badge badge-partial">Partial</span>
+        {% endif %}
+      </div>
+    </div>
+    {# Show failed items only #}
+    {% set failed_items = items | rejectattr('passed') | list %}
+    {% if failed_items %}
+    <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+      {% for item in failed_items %}
+      <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:{% if not loop.last %}8px{% else %}0{% endif %};">
+        <span style="color:var(--red); font-weight:600; margin-top:1px;">✗</span>
+        <div>
+          <div style="font-size:13px;">{{ item['item_text'] }}</div>
+          {% if item['note'] %}
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px; font-style:italic;">{{ item['note'] }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── All answers (collapsible) ── #}
+{% if sections %}
+<details style="margin-bottom:20px;">
+  <summary style="font-size:13px; color:var(--text-muted); cursor:pointer; padding:8px 0; user-select:none;">
+    View all {{ total }} answers
+  </summary>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Result</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(idx=1) %}
+        {% for section_title, items in sections.items() %}
+          {% for item in items %}
+          <tr>
+            <td class="mono" style="color:var(--text-muted);">{{ ns.idx }}</td>
+            <td>{{ item['item_text'] }}</td>
+            <td>
+              {% if item['passed'] %}
+                <span class="badge badge-pass">Pass</span>
+              {% else %}
+                <span class="badge badge-fail">Fail</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--text-muted); font-size:12px;">{{ item['note'] or '—' }}</td>
+          </tr>
+          {% set ns.idx = ns.idx + 1 %}
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+
+{% endblock %}
