@@ -12,6 +12,7 @@ dependencies = [
     "pytest-asyncio>=0.23",
     "pytest-html>=4.1",
     "slack-bolt>=1.18",
+    "flask>=3.0",
 ]
 
 [project.optional-dependencies]

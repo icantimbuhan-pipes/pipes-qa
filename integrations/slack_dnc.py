@@ -1,9 +1,9 @@
 """
 Slack DNC Bot — Socket Mode (no public URL needed).
 
-Watches a Slack channel for phone numbers.
-When a number is posted, it automatically fires a DNC postback to Pipes.
-Reacts ✅ on success, ❌ on failure.
+React ✔️  (heavy_check_mark) on any message containing a phone number
+→ bot extracts the number, fires the DNC postback to Pipes,
+  then reacts ✅ on success or ❌ on failure.
 
 Run:
     uv run python -m integrations.slack_dnc
@@ -131,22 +131,52 @@ def main():
 
     app = App(token=bot_token)
 
-    @app.event("message")
-    def handle_message(event, client):
-        channel_id = event.get("channel", "")
-        subtype    = event.get("subtype")
-        text       = event.get("text", "")
-        log.info(f"EVENT — channel={channel_id} subtype={subtype} text={repr(text)}")
+    TRIGGER_REACTION = "heavy_check_mark"  # ✔️  — react this to DNC a number
 
-        if subtype:
+    @app.event("reaction_added")
+    def handle_reaction(event, client):
+        reaction   = event.get("reaction", "")
+        item       = event.get("item", {})
+        channel_id = item.get("channel", "")
+        msg_ts     = item.get("ts", "")
+
+        if reaction != TRIGGER_REACTION:
             return
 
         if DNC_CHANNEL and channel_id != DNC_CHANNEL:
             log.debug(f"Skipping — not the DNC channel ({channel_id})")
             return
 
+        log.info(f"✔️  reaction in {channel_id} on ts={msg_ts} — fetching message...")
+
+        # Fetch the original message text
+        try:
+            result = client.conversations_history(
+                channel=channel_id,
+                latest=msg_ts,
+                inclusive=True,
+                limit=1,
+            )
+            messages = result.get("messages", [])
+            if not messages:
+                log.warning("Could not fetch original message")
+                return
+            text = messages[0].get("text", "")
+        except Exception as exc:
+            log.error(f"conversations_history error: {exc}")
+            return
+
         phones = extract_phones(text)
         if not phones:
+            log.info(f"No phone number found in message: {repr(text)}")
+            try:
+                client.chat_postMessage(
+                    channel=channel_id,
+                    thread_ts=msg_ts,
+                    text="⚠️ No phone number found in that message.",
+                )
+            except Exception:
+                pass
             return
 
         log.info(f"Found {len(phones)} number(s): {phones}")
@@ -156,10 +186,10 @@ def main():
         try:
             client.reactions_add(
                 channel=channel_id,
-                timestamp=event["ts"],
+                timestamp=msg_ts,
                 name="white_check_mark" if all_ok else "x",
             )
-            log.info(f"Reacted {'✅' if all_ok else '❌'} to message in {channel_id}")
+            log.info(f"Reacted {'✅' if all_ok else '❌'}")
         except Exception as exc:
             log.warning(f"Could not add reaction: {exc}")
 
@@ -168,14 +198,20 @@ def main():
             try:
                 client.chat_postMessage(
                     channel=channel_id,
-                    thread_ts=event["ts"],
+                    thread_ts=msg_ts,
                     text=f"⚠️ DNC failed for: {', '.join(failed)}",
                 )
             except Exception as exc:
                 log.warning(f"Could not post thread reply: {exc}")
 
+    # Ignore plain messages (no auto-DNC on post)
+    @app.event("message")
+    def handle_message(event):
+        pass
+
     channel_label = DNC_CHANNEL or "(all channels — set DNC_SLACK_CHANNEL to restrict)"
     print(f"  DNC bot starting — watching: {channel_label}")
+    print(f"  Trigger: react ✔️  (heavy_check_mark) on any message with a phone number")
     print(f"  DNC endpoint: {DNC_URL}")
     print(f"  Press Ctrl+C to stop.\n")
 

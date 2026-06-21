@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 from rich.console import Console
 from rich.rule import Rule
 
+from runner.sheets import fetch_khomp_classification
+
 console = Console()
 EASTERN = ZoneInfo("America/New_York")
 
@@ -89,10 +91,17 @@ def run_hourly_form(results: dict) -> dict:
     console.print("  [dim]ENTER = No errors in Production for last hour[/dim]")
     rollbar = _inp("  → ") or "No errors in Production for last hour"
 
-    # ── Khomp Classification ──
-    console.print("\n  Khomp Classification (last 8hrs), e.g.:")
-    console.print("  [dim]06/18/2026 | Short : 6.32% | Long : 0.03% | Timeout : 1.35%[/dim]")
-    khomp_class = _inp("  → ")
+    # ── Khomp Classification — auto-fill from Google Sheet ──
+    console.print("\n  Khomp Classification (last 8hrs):")
+    auto_class = fetch_khomp_classification(target_date=now_et.date())
+    if auto_class:
+        console.print(f"  [green]Auto-filled:[/green] {auto_class}")
+        console.print("  [dim]ENTER to keep, or type to override[/dim]")
+        khomp_class = _inp("  → ") or auto_class
+    else:
+        console.print("  [dim]e.g. 06/18/2026 | Short : 6.32% | Long : 0.03% | Timeout : 1.35%[/dim]")
+        console.print("  [dim](Sheet unavailable — type manually)[/dim]")
+        khomp_class = _inp("  → ")
 
     # ── Zapier ──
     console.print("\n  Zapier:")
