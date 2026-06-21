@@ -1,0 +1,105 @@
+{% extends "telgorithm/base.html" %}
+{% block title %}Reports — Telgorithm{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+  <div class="page-header" style="margin-bottom:0;">
+    <h1>Telgorithm — Company Reports</h1>
+    <p>Aggregated metrics per company. Use the date bar to switch between daily uploads.</p>
+  </div>
+  {% if companies %}
+  <form method="post" action="{{ url_for('telgorithm.send_slack') }}">
+    <input type="hidden" name="date" value="{{ selected_date or '' }}">
+    <button type="submit" class="btn btn-primary" style="white-space:nowrap;">
+      ↗ Send to Slack
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{# ── Date filter bar ── #}
+{% if available_dates %}
+<div class="date-bar">
+  <span class="date-bar-label">Date</span>
+  <div class="date-chips">
+    {% for d in available_dates[:14] %}
+      <a href="{{ url_for('telgorithm.reports', date=d.report_date) }}"
+         class="date-chip {% if d.report_date == selected_date %}active{% endif %}">
+        {{ d.report_date }}
+        <span style="opacity:.55; font-size:11px;">({{ "{:,}".format(d.record_count) }})</span>
+      </a>
+    {% endfor %}
+    {% if available_dates | length > 14 %}
+      <span style="font-size:12px; color:var(--text-muted); align-self:center;">+ {{ available_dates|length - 14 }} more</span>
+    {% endif %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="date" name="date" value="{{ selected_date or '' }}" onchange="this.form.submit()">
+    {% if selected_date %}
+      <a href="{{ url_for('telgorithm.reports') }}" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;">Clear</a>
+    {% endif %}
+  </form>
+</div>
+{% endif %}
+
+{% if selected_date %}
+<p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+  Showing data for <strong style="color:var(--text)">{{ selected_date }}</strong>
+</p>
+{% endif %}
+
+{% if companies %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th style="text-align:right">Total</th>
+        <th style="text-align:right">Delivered</th>
+        <th style="text-align:right">Failed</th>
+        <th style="text-align:right">Delivered Rate</th>
+        <th style="text-align:right">Failed Rate</th>
+        <th style="text-align:right">Avg / min</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in companies %}
+      <tr>
+        <td style="font-weight:500;">{{ c.name }}</td>
+        <td class="mono" style="text-align:right">{{ "{:,}".format(c.total) }}</td>
+        <td class="mono" style="text-align:right; color:#4ade80">{{ "{:,}".format(c.delivered) }}</td>
+        <td class="mono" style="text-align:right; color:#f87171">{{ "{:,}".format(c.failed) }}</td>
+        <td style="text-align:right">
+          <span class="badge {% if c.delivered_rate >= 95 %}badge-delivered{% elif c.delivered_rate >= 80 %}badge-other{% else %}badge-failed{% endif %}">
+            {{ c.delivered_rate }}%
+          </span>
+        </td>
+        <td style="text-align:right">
+          <span class="badge {% if c.failed_rate <= 5 %}badge-delivered{% elif c.failed_rate <= 20 %}badge-other{% else %}badge-failed{% endif %}">
+            {{ c.failed_rate }}%
+          </span>
+        </td>
+        <td class="mono" style="text-align:right; color:var(--text-muted)">
+          {% if c.avg_per_min is not none %}{{ "%.1f"|format(c.avg_per_min) }}{% else %}—{% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('telgorithm.report', slug=c.slug, date=selected_date) }}"
+             class="btn btn-ghost" style="padding:4px 12px; font-size:12px;">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div style="font-size: 40px;">📊</div>
+  {% if selected_date %}
+    <p>No data for <strong>{{ selected_date }}</strong>. <a href="{{ url_for('telgorithm.upload') }}">Upload a CSV</a> for this date.</p>
+  {% else %}
+    <p>No data yet. <a href="{{ url_for('telgorithm.upload') }}">Upload a CSV</a> to generate reports.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

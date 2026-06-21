@@ -1,0 +1,73 @@
+{% extends "telgorithm/base.html" %}
+{% block title %}Upload — Telgorithm{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Telgorithm — Upload CSV Report</h1>
+  <p>Import a Telgorithm message delivery export. Records are appended to the database on each upload.</p>
+</div>
+
+<div class="card" style="max-width: 640px;">
+  <form method="post" enctype="multipart/form-data" id="upload-form">
+
+    <div style="margin-bottom: 20px;">
+      <label for="report_date">Report Date</label>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+        The date this CSV covers. Defaults to today — change it if you're importing a previous day.
+      </p>
+      <input type="date" name="report_date" id="report_date" value="{{ today }}"
+             style="width:180px; padding:8px 12px; font-size:14px;">
+    </div>
+
+    <label for="csv_file">CSV File</label>
+    <div class="file-zone" id="drop-zone">
+      <input type="file" name="csv_file" id="csv_file" accept=".csv">
+      <div class="file-zone-icon">📂</div>
+      <div class="file-zone-label">Drop a CSV here or click to browse</div>
+      <div class="file-zone-sub">UTF-8 encoded · Max 32 MB</div>
+      <div class="file-name-display" id="file-name"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;">Required columns</p>
+      <div class="hint-grid">
+        {% for col in [
+          "CreatedOn", "From", "To", "TextSegmentCount", "Status",
+          "ErrorCode", "ErrorDescription", "Campaign ID",
+          "RecipientCarrierName", "Text"
+        ] %}
+          <span class="hint-tag">{{ col }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; gap: 10px; align-items: center;">
+      <button type="submit" class="btn btn-primary">
+        <span>↑</span> Import Records
+      </button>
+      <a href="{{ url_for('telgorithm.reports') }}" class="btn btn-ghost">View Reports</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  const input = document.getElementById('csv_file');
+  const display = document.getElementById('file-name');
+  const zone = document.getElementById('drop-zone');
+
+  input.addEventListener('change', () => {
+    display.textContent = input.files[0]?.name || '';
+  });
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      display.textContent = e.dataTransfer.files[0].name;
+    }
+  });
+</script>
+{% endblock %}

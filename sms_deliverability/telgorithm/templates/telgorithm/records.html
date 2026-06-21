@@ -1,0 +1,100 @@
+{% extends "telgorithm/base.html" %}
+{% block title %}Records — Telgorithm{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Telgorithm — Imported Records</h1>
+  <p>All records imported from Telgorithm CSV uploads, newest first.</p>
+</div>
+
+<div class="stat-bar">
+  <div class="stat">
+    <div class="stat-value">{{ "{:,}".format(total) }}</div>
+    <div class="stat-label">Total records</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ page }} / {{ total_pages }}</div>
+    <div class="stat-label">Page</div>
+  </div>
+</div>
+
+{% if rows %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Company</th>
+        <th>Created On</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Segments</th>
+        <th>Status</th>
+        <th>Error Code</th>
+        <th>Error Description</th>
+        <th>Campaign ID</th>
+        <th>Carrier</th>
+        <th>Text</th>
+        <th>Imported At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="mono" style="color: var(--text-muted);">{{ row['id'] }}</td>
+        <td>{{ row['company_name'] or '<span style="color:var(--text-muted)">Unknown</span>' | safe }}</td>
+        <td class="mono">{{ row['created_on'] or '—' }}</td>
+        <td class="mono">{{ row['from_number'] or '—' }}</td>
+        <td class="mono">{{ row['to_number'] or '—' }}</td>
+        <td style="text-align: right;">{{ row['text_segment_count'] or '—' }}</td>
+        <td>
+          {% set s = (row['status'] or '') | lower %}
+          {% if 'delivered' in s %}
+            <span class="badge badge-delivered">{{ row['status'] }}</span>
+          {% elif 'failed' in s or 'error' in s or 'undelivered' in s %}
+            <span class="badge badge-failed">{{ row['status'] }}</span>
+          {% else %}
+            <span class="badge badge-other">{{ row['status'] or '—' }}</span>
+          {% endif %}
+        </td>
+        <td class="mono">{{ row['error_code'] or '—' }}</td>
+        <td title="{{ row['error_description'] }}">{{ row['error_description'] or '—' }}</td>
+        <td class="mono">{{ row['campaign_id'] or '—' }}</td>
+        <td>{{ row['recipient_carrier_name'] or '—' }}</td>
+        <td title="{{ row['text'] }}" style="max-width: 220px;">{{ row['text'] or '—' }}</td>
+        <td class="mono" style="color: var(--text-muted); white-space: nowrap;">{{ row['imported_at'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+    <a href="?page={{ page - 1 }}">← Prev</a>
+  {% endif %}
+
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}
+      <span class="current">{{ p }}</span>
+    {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+      <a href="?page={{ p }}">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}
+      <span class="dots">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <div style="font-size: 40px;">📭</div>
+  <p>No records yet. <a href="{{ url_for('telgorithm.upload') }}">Upload a CSV</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}
