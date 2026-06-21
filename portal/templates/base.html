@@ -209,6 +209,8 @@
     <div class="nav-divider"></div>
     <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}" href="/upload">SMS</a>
     <div class="nav-divider"></div>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('validator.') %}active{% endif %}"
+       href="{{ url_for('validator.index') }}">🧪 Validator</a>
     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('maintenance.') %}active{% endif %}"
        href="{{ url_for('maintenance.index') }}">⚙ Maintenance</a>
   </div>

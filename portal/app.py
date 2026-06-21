@@ -6,6 +6,7 @@ from flask import Flask, redirect, render_template, url_for
 from portal.db import init_db, list_sessions
 from portal.daily_qa.routes import bp as daily_qa_bp
 from portal.maintenance.routes import bp as maintenance_bp
+from portal.validator.routes import bp as validator_bp
 from sms_deliverability.telgorithm.db import init_db as tel_init
 from sms_deliverability.telgorithm.routes import bp as telgorithm_bp
 from sms_deliverability.signalmash.db import init_db as sig_init
@@ -31,6 +32,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(daily_qa_bp,   url_prefix="/daily-qa")
     app.register_blueprint(maintenance_bp, url_prefix="/maintenance")
+    app.register_blueprint(validator_bp,  url_prefix="/validator")
     app.register_blueprint(telgorithm_bp, url_prefix="/telgorithm")
     app.register_blueprint(signalmash_bp, url_prefix="/signalmash")
 

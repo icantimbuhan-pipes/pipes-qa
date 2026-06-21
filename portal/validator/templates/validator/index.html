@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}API Validator — Pipes.QA Portal{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Dashboard</a>
+</div>
+
+<div class="page-header" style="margin-bottom:20px;">
+  <h1>API Validator</h1>
+  <p>Test how the Pipes API handles specific scenarios — invalid data, expired consent, DNC checks, and more. Switch providers to run the same test against any campaign.</p>
+</div>
+
+{# ── Provider selector ── #}
+<div class="card" style="margin-bottom:28px; padding:18px 20px;">
+  <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:200px;">
+      <span style="font-size:13px; font-weight:600; white-space:nowrap;">Provider:</span>
+      <select id="provider-select" onchange="onProviderChange()"
+              style="flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text);
+                     border-radius:7px; padding:8px 12px; font-size:14px; cursor:pointer;">
+        {% for p in providers %}
+          <option value="{{ p.key }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="font-size:12px; color:var(--text-muted);">
+      All tests below will use this provider's API key and default params.
+    </div>
+  </div>
+  <div id="no-api-key-warning" style="
+    display:none; margin-top:12px; padding:10px 14px;
+    background:var(--red-bg); border:1px solid var(--red-border);
+    border-radius:7px; color:var(--red); font-size:12px;
+  ">
+    ⚠ No API key configured for this provider. Go to
+    <a href="{{ url_for('maintenance.index') }}" style="color:var(--red); font-weight:600;">Maintenance</a>
+    to add it.
+  </div>
+</div>
+
+{# ── Test scenario cards ── #}
+<div id="scenarios-grid" style="
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap:14px;
+">
+
+  {% for s in scenarios %}
+  <div class="card scenario-card" id="card-{{ s.key }}" style="display:flex; flex-direction:column; gap:0;">
+
+    {# Header #}
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:12px;">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          <span style="
+            font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+            padding:2px 8px; border-radius:4px;
+            background: {{ s.color }}22;
+            color: {{ s.color }};
+            border: 1px solid {{ s.color }}44;
+          ">{{ s.category }}</span>
+        </div>
+        <div style="font-size:15px; font-weight:600;">{{ s.name }}</div>
+      </div>
+      <div id="status-{{ s.key }}" style="flex-shrink:0; margin-top:2px;"></div>
+    </div>
+
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.6;">
+      {{ s.description }}
+    </div>
+
+    {# Expected badge #}
+    {% if s.expected_rejection %}
+    <div style="margin-bottom:14px;">
+      <span style="font-size:11px; color:var(--text-muted);">Expected rejection:</span>
+      <span style="
+        font-family:var(--mono); font-size:11px; font-weight:600;
+        padding:2px 8px; border-radius:4px; margin-left:6px;
+        background:var(--red-bg); color:var(--red); border:1px solid var(--red-border);
+      ">{{ s.expected_rejection }}</span>
+    </div>
+    {% else %}
+    <div style="margin-bottom:14px;">
+      <span style="font-size:11px; color:var(--text-muted);">Expected: </span>
+      <span style="
+        font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; margin-left:4px;
+        background:var(--green-bg); color:var(--green); border:1px solid var(--green-border);
+      ">Accepted or any rejection</span>
+    </div>
+    {% endif %}
+
+    {# Editable params #}
+    <div style="margin-bottom:16px;">
+      {% for field in s.editable %}
+      <div style="margin-bottom:8px;">
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.04em; text-transform:uppercase; display:block; margin-bottom:4px;">
+          {{ field.label }}
+        </label>
+        <input
+          type="text"
+          id="param-{{ s.key }}-{{ field.param }}"
+          data-param="{{ field.param }}"
+          value="{% if field.default == '__QA_JORNAYA_LEADID__' %}{{ qa_jornaya }}{% elif field.default == '__QA_PHONE_NUMBER__' %}{{ qa_phone }}{% elif field.default == '__91_days_ago__' %}{{ days_ago_91 }}{% else %}{{ field.default }}{% endif %}"
+          style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+                 border-radius:6px; padding:7px 10px; font-size:12px; font-family:var(--mono);"
+          autocomplete="off"
+        >
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Run button #}
+    <button
+      type="button"
+      class="btn btn-primary run-btn"
+      data-scenario="{{ s.key }}"
+      data-editable='{{ s.editable | tojson }}'
+      onclick="runTest('{{ s.key }}', {{ s.editable | tojson }})"
+      style="width:100%; justify-content:center; margin-top:auto;"
+    >
+      ▶ Run Test
+    </button>
+
+    {# Response panel #}
+    <div id="result-{{ s.key }}" style="display:none; margin-top:12px;
+         border-top:1px solid var(--border); padding-top:12px;">
+
+      <div id="result-main-{{ s.key }}" style="margin-bottom:10px;"></div>
+
+      <details id="result-details-{{ s.key }}">
+        <summary style="font-size:11px; color:var(--text-muted); cursor:pointer;
+                        padding:4px 0; list-style:none; user-select:none;">
+          ▶ Full Response &amp; Params Sent
+        </summary>
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+          <div>
+            <div style="font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+                        color:var(--text-muted); margin-bottom:4px;">Response</div>
+            <pre id="result-json-{{ s.key }}" style="
+              background:var(--bg); border:1px solid var(--border); border-radius:6px;
+              padding:10px; font-size:11px; font-family:var(--mono); overflow-x:auto;
+              color:var(--text); white-space:pre-wrap; word-break:break-all;
+            "></pre>
+          </div>
+          <div>
+            <div style="font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+                        color:var(--text-muted); margin-bottom:4px;">Params Sent</div>
+            <pre id="result-params-{{ s.key }}" style="
+              background:var(--bg); border:1px solid var(--border); border-radius:6px;
+              padding:10px; font-size:11px; font-family:var(--mono); overflow-x:auto;
+              color:var(--text-muted); white-space:pre-wrap; word-break:break-all;
+            "></pre>
+          </div>
+        </div>
+      </details>
+    </div>
+
+  </div>
+  {% endfor %}
+
+</div>
+
+<style>
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary { color: var(--accent); }
+  @media (max-width: 640px) {
+    #scenarios-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  const PROVIDER_KEYS = {};
+  {% for p in providers %}
+  PROVIDER_KEYS['{{ p.key }}'] = '{{ p.name }}';
+  {% endfor %}
+
+  function onProviderChange() {
+    // Visual feedback only — the provider key is sent on each Run
+    const key = document.getElementById('provider-select').value;
+    // Clear all results when switching provider
+    document.querySelectorAll('[id^="result-"]').forEach(el => {
+      if (el.id.startsWith('result-') && !el.id.includes('-json-') && !el.id.includes('-main-') && !el.id.includes('-params-') && !el.id.includes('-details-')) {
+        el.style.display = 'none';
+      }
+    });
+    document.querySelectorAll('[id^="status-"]').forEach(el => el.innerHTML = '');
+  }
+
+  async function runTest(scenarioKey, editableFields) {
+    const providerKey = document.getElementById('provider-select').value;
+    const btn = document.querySelector(`[data-scenario="${scenarioKey}"]`);
+
+    // Collect current param values from inputs
+    const overrides = {};
+    editableFields.forEach(f => {
+      const input = document.getElementById(`param-${scenarioKey}-${f.param}`);
+      if (input) overrides[f.param] = input.value;
+    });
+
+    // Loading state
+    btn.disabled = true;
+    btn.textContent = '⏳ Running…';
+    document.getElementById(`result-${scenarioKey}`).style.display = 'none';
+    document.getElementById(`status-${scenarioKey}`).innerHTML = '';
+
+    try {
+      const res  = await fetch('{{ url_for("validator.run_test") }}', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ provider_key: providerKey, overrides }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        showError(scenarioKey, data.error || 'Request failed');
+        btn.textContent = '▶ Run Test';
+        btn.disabled = false;
+        return;
+      }
+
+      renderResult(scenarioKey, data);
+    } catch (e) {
+      showError(scenarioKey, 'Network error: ' + e.message);
+    }
+
+    btn.textContent = '↺ Re-run';
+    btn.disabled = false;
+  }
+
+  function renderResult(key, data) {
+    const panel     = document.getElementById(`result-${key}`);
+    const mainEl    = document.getElementById(`result-main-${key}`);
+    const jsonEl    = document.getElementById(`result-json-${key}`);
+    const paramsEl  = document.getElementById(`result-params-${key}`);
+    const statusEl  = document.getElementById(`status-${key}`);
+
+    const rejection = (data.rejection || '').toLowerCase().trim();
+    const accepted  = data.accepted;
+
+    // Find what this scenario expects
+    const card       = document.getElementById(`card-${key}`);
+    const expectedEl = card.querySelector('[style*="red-bg"]');
+    const expected   = expectedEl ? expectedEl.textContent.trim().toLowerCase() : null;
+
+    // Determine pass/fail
+    let verdict, verdictColor, verdictBg, verdictBorder;
+    if (!expected) {
+      // No specific expectation — just show what we got
+      verdict = accepted ? '✅ Accepted' : `Response: ${data.rejection || 'rejected'}`;
+      verdictColor = accepted ? 'var(--green)' : 'var(--text)';
+      verdictBg    = accepted ? 'var(--green-bg)' : 'var(--surface)';
+      verdictBorder = accepted ? 'var(--green-border)' : 'var(--border)';
+    } else if (rejection && rejection.includes(expected)) {
+      verdict = `✅ Got expected rejection`;
+      verdictColor = 'var(--green)';
+      verdictBg    = 'var(--green-bg)';
+      verdictBorder = 'var(--green-border)';
+    } else if (accepted) {
+      verdict = '⚠ Accepted — expected a rejection';
+      verdictColor = 'var(--yellow)';
+      verdictBg    = 'rgba(251,191,36,.1)';
+      verdictBorder = 'rgba(251,191,36,.4)';
+    } else {
+      verdict = `⚠ Wrong rejection: "${data.rejection || 'unknown'}"`;
+      verdictColor = 'var(--yellow)';
+      verdictBg    = 'rgba(251,191,36,.1)';
+      verdictBorder = 'rgba(251,191,36,.4)';
+    }
+
+    mainEl.innerHTML = `
+      <div style="padding:10px 14px; border-radius:8px;
+                  background:${verdictBg}; border:1px solid ${verdictBorder};
+                  color:${verdictColor}; font-size:13px; font-weight:600;">
+        ${verdict}
+      </div>
+      ${rejection ? `<div style="margin-top:8px; font-size:12px; color:var(--text-muted);">
+        Rejection code: <span style="font-family:var(--mono); color:var(--red);">${data.rejection}</span>
+      </div>` : ''}
+    `;
+
+    // Status dot in card header
+    statusEl.innerHTML = accepted
+      ? '<span style="font-size:18px;" title="Accepted">✅</span>'
+      : `<span style="font-size:18px;" title="${data.rejection}">❌</span>`;
+
+    jsonEl.textContent   = JSON.stringify(data.response,    null, 2);
+    paramsEl.textContent = JSON.stringify(data.params_sent, null, 2);
+
+    panel.style.display = 'block';
+  }
+
+  function showError(key, message) {
+    const panel  = document.getElementById(`result-${key}`);
+    const mainEl = document.getElementById(`result-main-${key}`);
+    mainEl.innerHTML = `
+      <div style="padding:10px 14px; border-radius:8px;
+                  background:var(--red-bg); border:1px solid var(--red-border);
+                  color:var(--red); font-size:13px;">
+        ✗ ${message}
+      </div>
+    `;
+    panel.style.display = 'block';
+    document.getElementById(`status-${key}`).innerHTML = '<span style="font-size:18px;">⚠️</span>';
+  }
+</script>
+
+{% endblock %}
