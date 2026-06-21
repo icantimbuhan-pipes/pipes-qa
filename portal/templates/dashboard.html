@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Pipes.QA Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Pipes.QA Portal</h1>
+  <p>Daily monitoring, QA runs, and SMS deliverability — all in one place.</p>
+</div>
+
+{# ── Action Cards ── #}
+<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-bottom:40px;">
+
+  {# Daily QA #}
+  <div class="card" style="display:flex; flex-direction:column; gap:16px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:28px;">📋</span>
+        <div>
+          <div style="font-size:16px; font-weight:700;">Daily QA</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:1px;">Guided checklist · step by step</div>
+        </div>
+      </div>
+      <p style="font-size:13px; color:var(--text-muted);">Walk through your QA checklist item by item. Pass or fail each check, add notes, and send the summary to Slack when done.</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:auto;">
+      <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-primary" style="flex:1; justify-content:center;">Start QA →</a>
+      <span class="badge badge-blue">4 checklists</span>
+    </div>
+  </div>
+
+  {# Hourly QA #}
+  <div class="card" style="display:flex; flex-direction:column; gap:16px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:28px;">⏱</span>
+        <div>
+          <div style="font-size:16px; font-weight:700;">Hourly QA</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:1px;">Monitor all providers · 9 items</div>
+        </div>
+      </div>
+      <p style="font-size:13px; color:var(--text-muted);">Run the hourly monitoring check across all active providers. Results auto-populate the Slack hourly report format.</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:auto;">
+      <form method="post" action="{{ url_for('daily_qa.start') }}" style="flex:1;">
+        <input type="hidden" name="checklist_key" value="hourly-heavy-khomp">
+        <button type="submit" class="btn btn-ghost" style="width:100%; justify-content:center;">Run Hourly →</button>
+      </form>
+      <span class="badge badge-blue">9 items</span>
+    </div>
+  </div>
+
+  {# SMS Deliverability #}
+  <div class="card" style="display:flex; flex-direction:column; gap:16px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:28px;">📨</span>
+        <div>
+          <div style="font-size:16px; font-weight:700;">SMS Deliverability</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:1px;">Telgorithm · Signalmash</div>
+        </div>
+      </div>
+      <p style="font-size:13px; color:var(--text-muted);">Upload daily CSV exports, view per-company KPIs, failure breakdowns, and send delivery summaries to Slack.</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:auto;">
+      <a href="/upload" class="btn btn-ghost" style="flex:1; justify-content:center;">Open Reports →</a>
+      <span class="badge badge-blue">2 providers</span>
+    </div>
+  </div>
+
+</div>
+
+{# ── Recent QA Runs ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+  <h2 style="font-size:15px; font-weight:600;">Recent QA Runs</h2>
+  <a href="{{ url_for('daily_qa.pick') }}" style="font-size:13px; color:var(--accent); text-decoration:none;">All runs →</a>
+</div>
+
+{% if recent %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Checklist</th>
+        <th>Started</th>
+        <th>Result</th>
+        <th>Slack</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+      <tr>
+        <td style="font-weight:500;">{{ r['checklist_name'] }}</td>
+        <td class="mono" style="color:var(--text-muted); font-size:12px;">{{ r['started_at'][:16].replace('T',' ') }}</td>
+        <td>
+          {% if r['finished_at'] %}
+            {% if r['report_type'] == 'hourly' %}
+              <span class="badge badge-blue">Hourly</span>
+            {% else %}
+              <span class="badge badge-pass">Done</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-pending">In Progress</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r['slack_sent'] %}
+            <span style="color:var(--green); font-size:12px;">✓ Sent</span>
+          {% else %}
+            <span style="color:var(--text-muted); font-size:12px;">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('daily_qa.summary', session_id=r['id']) }}"
+             style="font-size:12px; color:var(--accent); text-decoration:none;">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div style="font-size:36px;">🚀</div>
+  <p>No QA runs yet. <a href="{{ url_for('daily_qa.pick') }}">Start your first checklist</a>.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -12,6 +12,7 @@ import json
 import importlib
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -123,7 +124,7 @@ def _save_progress(results: dict):
     _progress_path(results["checklist_key"]).write_text(json.dumps(results, indent=2))
 
 
-def _load_progress(key: str) -> dict | None:
+def _load_progress(key: str) -> Optional[dict]:
     path = _progress_path(key)
     if path.exists():
         try:
@@ -139,7 +140,7 @@ def _clear_progress(key: str):
         path.unlink()
 
 
-def _check_resume(checklist_entry: dict, checklist) -> dict | None:
+def _check_resume(checklist_entry: dict, checklist) -> Optional[dict]:
     saved = _load_progress(checklist_entry["key"])
     if not saved:
         return None
@@ -277,7 +278,7 @@ def _save_report(results: dict) -> Path:
 
 # ── Main run loop ──────────────────────────────────────────────────────────────
 
-def run_checklist(entry: dict, resume_data: dict | None = None) -> dict:
+def run_checklist(entry: dict, resume_data: Optional[dict] = None) -> dict:
     checklist_mod   = importlib.import_module(entry["module"])
     checklist       = getattr(checklist_mod, entry["attr"])
     default_pkey    = entry["default_provider"]

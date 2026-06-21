@@ -5,6 +5,7 @@ Sheet must be "Anyone with the link can view" (no API keys needed).
 import csv
 import io
 from datetime import date, datetime
+from typing import Optional
 
 import httpx
 
@@ -32,7 +33,7 @@ def _pct(value: str) -> str:
         return v
 
 
-def fetch_khomp_classification(target_date: date | None = None) -> str | None:
+def fetch_khomp_classification(target_date: Optional[date] = None) -> Optional[str]:
     """
     Reads the Khomp Classification sheet and returns the most recent row
     that has Short/Long/Timeout data.  If *target_date* is given, tries

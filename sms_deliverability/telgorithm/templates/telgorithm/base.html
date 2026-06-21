@@ -239,12 +239,14 @@
 <body>
 
 <nav>
-  <a class="nav-brand" href="/">Pipes QA</a>
+  <a class="nav-brand" href="/">Pipes.QA Portal</a>
   <span class="nav-sep">›</span>
   <a class="nav-module" href="/upload">SMS Deliverability</a>
   <div class="nav-links">
-    <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}" href="/upload">Upload</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/daily-qa">Daily QA</a>
     <div class="nav-divider"></div>
+    <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}" href="/upload">Upload</a>
     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('telgorithm.') %}active{% endif %}"
        href="{{ url_for('telgorithm.reports') }}">Telgorithm</a>
     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('signalmash.') %}active{% endif %}"
