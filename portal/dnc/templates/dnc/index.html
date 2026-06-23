@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}DNC — Pipes.QA Portal{% endblock %}
+{% block breadcrumb %}DNC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Do Not Call (DNC)</h1>
+  <p>Paste numbers to DNC them via the Pipes API, or let the Slack bot handle it. Both are logged below.</p>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+
+  {# ── Left: Manual DNC Form ── #}
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <div class="card">
+      <div class="card-title">🚫 Manual DNC</div>
+      <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+        Paste one or more numbers (any format). Preview detects numbers as you type.
+      </p>
+      <textarea id="numbers-input" rows="6"
+        placeholder="5122227114&#10;(512) 222-7114&#10;512-222-7114&#10;Multiple numbers OK — one per line or mixed text"></textarea>
+
+      <div style="margin-top:12px; min-height:32px;">
+        <div id="preview-empty" style="font-size:12px; color:var(--text-muted);">Start typing to preview detected numbers…</div>
+        <div id="preview-chips" style="display:none; flex-wrap:wrap; gap:6px;"></div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px; align-items:center;">
+        <button class="btn btn-danger" id="dnc-btn" disabled onclick="submitDNC()">
+          🚫 DNC Numbers
+        </button>
+        <button class="btn btn-ghost" onclick="document.getElementById('numbers-input').value=''; updatePreview();">Clear</button>
+        <span id="dnc-spinner" style="display:none; font-size:12px; color:var(--text-muted);">Processing…</span>
+      </div>
+
+      <div id="results-wrap" style="margin-top:18px; display:none;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Results</div>
+        <div id="results-list"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💬 Slack DNC Flow</div>
+
+      <div style="background:var(--purple-dim); border:1px solid rgba(94,53,177,.25); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:16px;">
+        <span style="font-size:40px; line-height:1; flex-shrink:0;">✔️</span>
+        <div>
+          <div style="font-size:14px; font-weight:700; color:var(--purple);">React with THIS emoji only</div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">The heavy checkmark ✔️ — NOT 👍 thumbsup, NOT ✅ white_check_mark</div>
+          <div style="font-size:11px; font-family:var(--mono); color:var(--text-muted); margin-top:4px;">Slack name: <strong>:heavy_check_mark:</strong></div>
+        </div>
+      </div>
+
+      <ol style="padding-left:18px; color:var(--text-secondary); line-height:2.4; font-size:13px; margin-bottom:14px;">
+        <li>Post a phone number in <strong>#test-hihi</strong> — anyone can post</li>
+        <li>React with <strong>✔️ :heavy_check_mark:</strong> — anyone can react</li>
+        <li>Bot replies <strong style="color:var(--green);">✅</strong> = DNC'd · <strong style="color:var(--red);">❌</strong> = API failed</li>
+        <li>Entry appears in the DNC Log on the right</li>
+      </ol>
+
+      <details style="margin-bottom:10px;">
+        <summary style="font-size:12px; font-weight:500; color:var(--text-secondary); cursor:pointer;">
+          ⚠️ Events not working? How to re-verify
+        </summary>
+        <div style="margin-top:10px; padding:12px; background:var(--yellow-bg); border:1px solid var(--yellow-border); border-radius:var(--radius-xs); font-size:12px; color:var(--text); line-height:1.8;">
+          Slack pauses event delivery if the endpoint was unreachable.<br>
+          To restore it: <strong>api.slack.com/apps → your app → Event Subscriptions → re-verify the URL below</strong>.<br>
+          The portal will respond to the challenge automatically.
+        </div>
+      </details>
+
+      <p style="font-size:12px; color:var(--text-muted);">
+        Events endpoint: <code style="font-family:var(--mono); background:var(--surface2); padding:1px 6px; border-radius:4px; font-size:11px;">https://qa.aimagicstuff.com/slack/events</code>
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recognized Number Formats</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:6px;">
+        {% for f in [
+          "5122227114",
+          "15122227114",
+          "+15122227114",
+          "(512) 222-7114",
+          "(512)2227114",
+          "512-222-7114",
+          "512.222.7114",
+          "512 222 7114",
+          "Multiple per line",
+        ] %}
+        <span style="font-family:var(--mono); font-size:12px; background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:4px 10px; color:var(--text-secondary);">{{ f }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Right: DNC Log ── #}
+  <div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div style="font-size:15px; font-weight:600;">DNC Log</div>
+      <span style="font-size:12px; color:var(--text-muted);">Last 100 entries</span>
+    </div>
+
+    {% if history %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="log-body">
+          {% for row in history %}
+          <tr>
+            <td class="mono" style="font-weight:500; white-space:nowrap;">
+              ({{ row['phone'][:3] }}) {{ row['phone'][3:6] }}-{{ row['phone'][6:] }}
+            </td>
+            <td>
+              {% if row['status'] == 'success' %}
+                <span class="badge badge-pass">success</span>
+              {% else %}
+                <span class="badge badge-fail">failed</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row['source'] == 'slack' %}
+                <span class="badge badge-blue">slack</span>
+              {% else %}
+                <span class="badge badge-purple">manual</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--text-muted); font-size:12px; white-space:nowrap;">
+              {{ row['created_at'][:16].replace('T', ' ') }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="empty-state">
+        <div style="font-size:36px; margin-bottom:8px;">📋</div>
+        <p style="font-size:14px; font-weight:500;">No DNC actions yet</p>
+        <p>Use the form on the left or react ✔️ in Slack.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<style>
+  .phone-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--purple-dim); border: 1px solid var(--purple-glow);
+    color: var(--purple); font-family: var(--mono); font-size: 12.5px;
+    padding: 4px 12px; border-radius: 20px;
+  }
+  .result-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 6px;
+    font-family: var(--mono); font-size: 13.5px;
+  }
+  .result-ok   { background: var(--green-bg); border: 1px solid var(--green-border); color: var(--green); }
+  .result-fail { background: var(--red-bg);   border: 1px solid var(--red-border);   color: var(--red); }
+</style>
+
+<script>
+  const input = document.getElementById('numbers-input');
+  const previewEmpty = document.getElementById('preview-empty');
+  const previewChips = document.getElementById('preview-chips');
+  const dncBtn = document.getElementById('dnc-btn');
+
+  function parsePhones(text) {
+    const found = new Set();
+    for (const m of [...text.matchAll(/<tel:(\d+)\|/g)]) {
+      let d = m[1];
+      if (d.length === 11 && d[0] === '1') d = d.slice(1);
+      if (d.length === 10) found.add(d);
+    }
+    for (const m of [...text.matchAll(/\b\d{10,11}\b/g)]) {
+      let d = m[0];
+      if (d.length === 11 && d[0] === '1') d = d.slice(1);
+      if (d.length === 10) found.add(d);
+    }
+    for (const m of [...text.matchAll(/\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4}/g)]) {
+      const d = m[0].replace(/\D/g,'');
+      if (d.length === 10) found.add(d);
+    }
+    for (const m of [...text.matchAll(/\(\d{3}\)\d{7}/g)]) {
+      const d = m[0].replace(/\D/g,'');
+      if (d.length === 10) found.add(d);
+    }
+    for (const m of [...text.matchAll(/[\d\(\)\-\.\s\+]{10,17}/g)]) {
+      let d = m[0].replace(/\D/g,'');
+      if (d.length === 11 && d[0] === '1') d = d.slice(1);
+      if (d.length === 10) found.add(d);
+    }
+    return [...found];
+  }
+
+  function fmt(p) { return `(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`; }
+
+  function updatePreview() {
+    const phones = parsePhones(input.value);
+    if (!phones.length) {
+      previewEmpty.style.display = '';
+      previewChips.style.display = 'none';
+      dncBtn.disabled = true;
+      return;
+    }
+    previewEmpty.style.display = 'none';
+    previewChips.style.display = 'flex';
+    previewChips.innerHTML = phones.map(p => `<span class="phone-chip">📞 ${fmt(p)}</span>`).join('');
+    dncBtn.disabled = false;
+  }
+
+  input.addEventListener('input', updatePreview);
+
+  function submitDNC() {
+    const spinner = document.getElementById('dnc-spinner');
+    const wrap    = document.getElementById('results-wrap');
+    const list    = document.getElementById('results-list');
+
+    dncBtn.disabled = true;
+    spinner.style.display = '';
+    wrap.style.display = 'none';
+
+    const body = new FormData();
+    body.append('numbers', input.value);
+
+    fetch('/dnc/submit', { method: 'POST', body })
+      .then(r => r.json())
+      .then(data => {
+        spinner.style.display = 'none';
+        if (data.error) {
+          list.innerHTML = `<div class="result-row result-fail">⚠️ ${data.error}</div>`;
+          wrap.style.display = '';
+          dncBtn.disabled = false;
+          return;
+        }
+        list.innerHTML = data.results.map(r =>
+          `<div class="result-row ${r.status === 'success' ? 'result-ok' : 'result-fail'}">
+            ${r.status === 'success' ? '✅' : '❌'}
+            <strong>${r.formatted}</strong>
+            <span style="opacity:.7; font-size:12px; margin-left:4px;">${r.status}</span>
+          </div>`
+        ).join('');
+        wrap.style.display = '';
+
+        const tbody = document.getElementById('log-body');
+        if (tbody) {
+          const now = new Date().toISOString().slice(0,16).replace('T',' ');
+          const rows = data.results.map(r => `
+            <tr>
+              <td class="mono" style="font-weight:500;">${r.formatted}</td>
+              <td><span class="badge ${r.status==='success'?'badge-pass':'badge-fail'}">${r.status}</span></td>
+              <td><span class="badge badge-purple">manual</span></td>
+              <td style="color:var(--text-muted); font-size:12px;">${now}</td>
+            </tr>`).join('');
+          tbody.insertAdjacentHTML('afterbegin', rows);
+        }
+        dncBtn.disabled = false;
+      })
+      .catch(err => {
+        spinner.style.display = 'none';
+        list.innerHTML = `<div class="result-row result-fail">❌ Request failed: ${err}</div>`;
+        wrap.style.display = '';
+        dncBtn.disabled = false;
+      });
+  }
+</script>
+{% endblock %}

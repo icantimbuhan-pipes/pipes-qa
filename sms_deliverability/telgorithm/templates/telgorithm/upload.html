@@ -2,9 +2,12 @@
 {% block title %}Upload — Telgorithm{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Telgorithm — Upload CSV Report</h1>
-  <p>Import a Telgorithm message delivery export. Records are appended to the database on each upload.</p>
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('telgorithm.reports') }}" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">← Reports</a>
+  <div class="page-header" style="margin-bottom:0;">
+    <h1>Telgorithm — Upload CSV Report</h1>
+    <p>Import a Telgorithm message delivery export. Records are appended to the database on each upload.</p>
+  </div>
 </div>
 
 <div class="card" style="max-width: 640px;">

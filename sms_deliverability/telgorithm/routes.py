@@ -2,7 +2,7 @@ import csv
 import io
 import uuid
 from datetime import date as date_type
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
@@ -79,10 +79,73 @@ def _today() -> str:
     return date_type.today().isoformat()
 
 
-def _get_date_filter() -> Optional[str]:
-    """Read ?date=YYYY-MM-DD from query string; None means all-time."""
-    d = request.args.get("date", "").strip()
-    return d if d else None
+def _dates_to_weeks(dates: list) -> list:
+    weeks: dict[str, dict] = {}
+    for row in dates:
+        try:
+            d = date_type.fromisoformat(row["report_date"])
+        except (ValueError, TypeError):
+            continue
+        ws = d - timedelta(days=d.weekday())
+        we = ws + timedelta(days=6)
+        key = ws.isoformat()
+        if key not in weeks:
+            weeks[key] = {"start": ws.isoformat(), "end": we.isoformat(), "count": 0,
+                          "label": f"{ws.strftime('%b %d')} – {we.strftime('%b %d')}"}
+        weeks[key]["count"] += row["record_count"]
+    return sorted(weeks.values(), key=lambda w: w["start"], reverse=True)
+
+
+def _dates_to_months(dates: list) -> list:
+    months: dict[str, dict] = {}
+    for row in dates:
+        try:
+            month = row["report_date"][:7]
+        except (TypeError, AttributeError):
+            continue
+        if month not in months:
+            months[month] = {"month": month, "count": 0}
+        months[month]["count"] += row["record_count"]
+    return sorted(months.values(), key=lambda m: m["month"], reverse=True)
+
+
+def _parse_view(available_dates: list) -> tuple:
+    view = request.args.get("view", "day")
+    date_param = request.args.get("date", "").strip()
+    month_param = request.args.get("month", "").strip()
+    weeks = _dates_to_weeks(available_dates)
+    months = _dates_to_months(available_dates)
+
+    if view == "month":
+        month = month_param or (date_param[:7] if len(date_param) >= 7 else "")
+        if not month and months:
+            month = months[0]["month"]
+        return ({"month": month} if month else {}, "month", month, "", month, weeks, months)
+
+    if view == "week":
+        if date_param:
+            try:
+                d = date_type.fromisoformat(date_param)
+            except ValueError:
+                d = date_type.today()
+        elif available_dates:
+            try:
+                d = date_type.fromisoformat(available_dates[0]["report_date"])
+            except (ValueError, TypeError):
+                d = date_type.today()
+        else:
+            d = date_type.today()
+        ws = d - timedelta(days=d.weekday())
+        we = ws + timedelta(days=6)
+        label = f"{ws.strftime('%b %d')} – {we.strftime('%b %d, %Y')}"
+        return ({"date_from": ws.isoformat(), "date_to": we.isoformat()}, "week", label,
+                ws.isoformat(), "", weeks, months)
+
+    # day
+    report_date = date_param or (available_dates[0]["report_date"] if available_dates else "")
+    label = report_date
+    return ({"report_date": report_date} if report_date else {}, "day", label,
+            report_date, "", weeks, months)
 
 
 # ── Upload ────────────────────────────────────────────────────────────────────
@@ -202,14 +265,12 @@ def records():
 
 @bp.route("/reports")
 def reports():
-    report_date = _get_date_filter()
-
     with get_conn() as conn:
         available_dates = get_available_dates(conn)
-        # Default to latest date if none specified and data exists
-        if report_date is None and available_dates:
-            report_date = available_dates[0]["report_date"]
-        companies_raw = get_companies(conn, report_date=report_date)
+    kw, view, label, selected_date, selected_month, weeks, months = _parse_view(available_dates)
+
+    with get_conn() as conn:
+        companies_raw = get_companies(conn, **kw)
 
     companies = []
     for c in companies_raw:
@@ -231,7 +292,12 @@ def reports():
         "telgorithm/reports.html",
         companies=companies,
         available_dates=available_dates,
-        selected_date=report_date,
+        selected_date=selected_date,
+        selected_month=selected_month,
+        view=view,
+        label=label,
+        weeks=weeks,
+        months=months,
     )
 
 
@@ -243,39 +309,34 @@ def report(slug: str):
     if not company_name:
         abort(404)
 
-    report_date = _get_date_filter()
     page = max(1, request.args.get("page", 1, type=int))
     per_page = 100
     offset = (page - 1) * per_page
 
     with get_conn() as conn:
         available_dates = get_available_dates(conn)
-        if report_date is None and available_dates:
-            report_date = available_dates[0]["report_date"]
-        stats = get_company_stats(conn, company_name, report_date=report_date)
-        failures = get_failure_breakdown(conn, company_name, report_date=report_date)
-        rows = get_company_records(conn, company_name, limit=per_page, offset=offset, report_date=report_date)
-        total_records = count_company_records(conn, company_name, report_date=report_date)
+    kw, view, label, selected_date, selected_month, weeks, months = _parse_view(available_dates)
+
+    with get_conn() as conn:
+        stats = get_company_stats(conn, company_name, **kw)
+        failures = get_failure_breakdown(conn, company_name, **kw)
+        rows = get_company_records(conn, company_name, limit=per_page, offset=offset, **kw)
+        total_records = count_company_records(conn, company_name, **kw)
+
+    shared = dict(
+        company_name=company_name, slug=slug,
+        available_dates=available_dates, selected_date=selected_date,
+        selected_month=selected_month, view=view, label=label,
+        weeks=weeks, months=months,
+    )
 
     if stats is None or stats["total"] == 0:
-        return render_template(
-            "telgorithm/report.html",
-            company_name=company_name,
-            slug=slug,
-            kpi=None,
-            failures=[],
-            rows=[],
-            page=1,
-            total_pages=1,
-            total_records=0,
-            available_dates=available_dates,
-            selected_date=report_date,
-        )
+        return render_template("telgorithm/report.html",
+            kpi=None, failures=[], rows=[], page=1, total_pages=1, total_records=0, **shared)
 
     total = stats["total"]
     delivered = stats["delivered"]
     failed = stats["failed"]
-
     kpi = {
         "total": total,
         "delivered": delivered,
@@ -285,21 +346,10 @@ def report(slug: str):
         "avg_per_min": avg_per_minute(total, stats["first_ts"], stats["last_ts"]),
         "campaign_ids": (stats["campaign_ids"] or "").split(","),
     }
-
     total_pages = max(1, (total_records + per_page - 1) // per_page)
-    return render_template(
-        "telgorithm/report.html",
-        company_name=company_name,
-        slug=slug,
-        kpi=kpi,
-        failures=failures,
-        rows=rows,
-        page=page,
-        total_pages=total_pages,
-        total_records=total_records,
-        available_dates=available_dates,
-        selected_date=report_date,
-    )
+    return render_template("telgorithm/report.html",
+        kpi=kpi, failures=failures, rows=rows,
+        page=page, total_pages=total_pages, total_records=total_records, **shared)
 
 
 # ── CSV Download ──────────────────────────────────────────────────────────────

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}API Configs — Pipes.QA Portal{% endblock %}
+{% block page_class %}page{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>API Configurations</h1>
+  <p>Manage per-provider API keys and test parameters. DB values override .env at trigger time.</p>
+</div>
+
+{# ── Shared QA Settings ── #}
+<div class="card" style="margin-bottom:28px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+    <h2 style="font-size:15px; font-weight:600;">Shared QA Settings</h2>
+    <span style="font-size:11px; color:var(--text-muted);">Used by every provider — phone, IP, email, Jornaya</span>
+  </div>
+  <form method="post" action="{{ url_for('api_configs.save_shared') }}">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-bottom:16px;">
+      {% for f in qa_fields %}
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px;">
+          {{ f.label }}
+          <span style="font-weight:400; font-family:var(--mono); color:rgba(107,114,128,.6);">
+            ({{ f.hint }})
+          </span>
+        </label>
+        <input type="text" name="{{ f.key }}"
+               value="{{ qa.get(f.key, '') }}"
+               placeholder="{{ f.placeholder }}"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:7px 10px; font-size:13px;
+                      font-family:var(--mono);">
+      </div>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary" style="font-size:13px; padding:7px 18px;">
+      💾 Save Shared Settings
+    </button>
+  </form>
+</div>
+
+{# ── Provider list ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+  <h2 style="font-size:15px; font-weight:600;">Provider API Keys</h2>
+  <a href="{{ url_for('api_configs.new') }}" class="btn btn-primary" style="font-size:13px; padding:7px 16px;">
+    + Add Provider
+  </a>
+</div>
+
+<div class="table-wrap" style="margin-bottom:32px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Provider</th>
+        <th>Key</th>
+        <th>API Key</th>
+        <th>Test Lead</th>
+        <th>API URL</th>
+        <th style="width:120px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in providers %}
+      <tr>
+        <td style="font-weight:500;">
+          {{ p.name }}
+          {% if p.custom %}
+            <span class="badge badge-blue" style="margin-left:6px; font-size:10px;">custom</span>
+          {% endif %}
+          {% if p.configured %}
+            <span class="badge badge-pass" style="margin-left:6px; font-size:10px;">DB</span>
+          {% elif p.env_api_key %}
+            <span class="badge badge-pending" style="margin-left:6px; font-size:10px;">.env</span>
+          {% else %}
+            <span class="badge badge-fail" style="margin-left:6px; font-size:10px;">not set</span>
+          {% endif %}
+        </td>
+        <td class="mono" style="font-size:11px; color:var(--text-muted);">{{ p.key }}</td>
+        <td class="mono" style="font-size:12px;">
+          {% if p.api_key %}
+            <span style="color:var(--green);">••••{{ p.api_key[-4:] }}</span>
+          {% elif p.env_api_key %}
+            <span style="color:var(--text-muted);">••••{{ p.env_api_key[-4:] }} (.env)</span>
+          {% else %}
+            <span style="color:var(--red); font-size:11px;">not configured</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">
+          {% if p.first_name %}{{ p.first_name }} {{ p.last_name }} · {{ p.state }} {{ p.postal_code }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="mono" style="font-size:11px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          {{ p.api_url }}
+        </td>
+        <td>
+          <div style="display:flex; gap:6px; justify-content:flex-end;">
+            <button class="btn btn-ghost" style="font-size:11px; padding:4px 10px;"
+                    onclick="testProvider('{{ p.key }}', this)" title="Fire a test call">
+              ▶ Test
+            </button>
+            <a href="{{ url_for('api_configs.edit', provider_key=p.key) }}"
+               class="btn btn-ghost" style="font-size:11px; padding:4px 10px;">✏ Edit</a>
+            {% if p.configured %}
+            <form method="post"
+                  action="{{ url_for('api_configs.delete', provider_key=p.key) }}"
+                  onsubmit="return confirm('Delete DB config? Will fall back to .env.')">
+              <button type="submit" class="btn btn-ghost"
+                      style="font-size:11px; padding:4px 10px; color:var(--red); border-color:var(--red-border);">
+                ✕
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Test result panel ── #}
+<div id="test-panel" style="display:none; position:fixed; bottom:20px; right:20px; z-index:200;
+     background:var(--surface); border:1px solid var(--border); border-radius:10px;
+     padding:16px 20px; max-width:420px; box-shadow:0 8px 32px rgba(0,0,0,.4);">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:13px; font-weight:600;" id="test-title">Testing…</span>
+    <button onclick="document.getElementById('test-panel').style.display='none'"
+            style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:16px;">✕</button>
+  </div>
+  <div id="test-status" style="font-size:12px; color:var(--text-muted);">Sending call…</div>
+  <pre id="test-response" style="margin-top:10px; font-size:11px; background:var(--bg);
+       border:1px solid var(--border); border-radius:6px; padding:10px; overflow-x:auto;
+       max-height:160px; white-space:pre-wrap; word-break:break-all; display:none;"></pre>
+</div>
+
+<script>
+async function testProvider(key, btn) {
+  const panel    = document.getElementById('test-panel');
+  const title    = document.getElementById('test-title');
+  const status   = document.getElementById('test-status');
+  const respEl   = document.getElementById('test-response');
+  const origText = btn.textContent;
+
+  btn.disabled   = true;
+  btn.textContent = '…';
+  panel.style.display = 'block';
+  title.textContent   = `Testing: ${key}`;
+  status.style.color  = 'var(--text-muted)';
+  status.textContent  = 'Sending call…';
+  respEl.style.display = 'none';
+
+  try {
+    const r    = await fetch(`/api-configs/${key}/test`, {method: 'POST'});
+    const data = await r.json();
+
+    if (data.ok && data.http_code === 200) {
+      status.style.color = 'var(--green)';
+      status.textContent = `✓ ${data.http_code} — Call accepted`;
+    } else if (data.ok) {
+      status.style.color   = 'var(--yellow)';
+      status.textContent   = `⚠ ${data.http_code || 'Error'} — ${data.response?.slice(0,80) || 'Check response'}`;
+    } else {
+      status.style.color   = 'var(--red)';
+      status.textContent   = `✕ ${data.error || 'Failed'}`;
+    }
+    if (data.response) {
+      respEl.textContent   = data.response;
+      respEl.style.display = 'block';
+    }
+  } catch (e) {
+    status.style.color  = 'var(--red)';
+    status.textContent  = `✕ Network error: ${e.message}`;
+  }
+
+  btn.disabled    = false;
+  btn.textContent = origText;
+}
+</script>
+
+{% endblock %}

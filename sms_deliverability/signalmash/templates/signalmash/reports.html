@@ -3,18 +3,33 @@
 
 {% block content %}
 <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
-  <div class="page-header" style="margin-bottom:0;">
-    <h1>Signalmash — Company Reports</h1>
-    <p>DLR-based delivery metrics per company. Use the date bar to switch between daily uploads.</p>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <a href="{{ url_for('upload') }}" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">← Upload</a>
+    <div class="page-header" style="margin-bottom:0;">
+      <h1>Signalmash — Company Reports</h1>
+      <p>DLR-based delivery metrics per company. Use the date bar to switch between daily uploads.</p>
+    </div>
   </div>
 </div>
 
-{% if available_dates %}
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+  <div class="view-toggle">
+    <a href="{{ url_for('signalmash.reports', view='day', date=selected_date or '') }}"
+       class="view-btn {% if view == 'day' %}active{% endif %}">Day</a>
+    <a href="{{ url_for('signalmash.reports', view='week', date=selected_date or '') }}"
+       class="view-btn {% if view == 'week' %}active{% endif %}">Week</a>
+    <a href="{{ url_for('signalmash.reports', view='month', month=selected_month or '') }}"
+       class="view-btn {% if view == 'month' %}active{% endif %}">Month</a>
+  </div>
+  {% if label %}<span style="font-size:13px; color:var(--text-muted);">Showing: <strong style="color:var(--text);">{{ label }}</strong></span>{% endif %}
+</div>
+
+{% if view == 'day' and available_dates %}
 <div class="date-bar">
   <span class="date-bar-label">Date</span>
   <div class="date-chips">
     {% for d in available_dates[:14] %}
-      <a href="{{ url_for('signalmash.reports', date=d.report_date) }}"
+      <a href="{{ url_for('signalmash.reports', view='day', date=d.report_date) }}"
          class="date-chip {% if d.report_date == selected_date %}active{% endif %}">
         {{ d.report_date }}
         <span style="opacity:.55; font-size:11px;">({{ "{:,}".format(d.record_count) }})</span>
@@ -22,18 +37,42 @@
     {% endfor %}
   </div>
   <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="day">
     <input type="date" name="date" value="{{ selected_date or '' }}" onchange="this.form.submit()">
-    {% if selected_date %}
-      <a href="{{ url_for('signalmash.reports') }}" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;">Clear</a>
-    {% endif %}
   </form>
 </div>
-{% endif %}
-
-{% if selected_date %}
-<p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-  Showing data for <strong style="color:var(--text)">{{ selected_date }}</strong>
-</p>
+{% elif view == 'week' and weeks %}
+<div class="date-bar">
+  <span class="date-bar-label">Week</span>
+  <div class="date-chips">
+    {% for w in weeks[:10] %}
+      <a href="{{ url_for('signalmash.reports', view='week', date=w.start) }}"
+         class="date-chip {% if w.start == selected_date %}active{% endif %}">
+        {{ w.label }}<span style="opacity:.55; font-size:11px;"> ({{ "{:,}".format(w.count) }})</span>
+      </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="week">
+    <input type="date" name="date" value="{{ selected_date or '' }}" onchange="this.form.submit()">
+  </form>
+</div>
+{% elif view == 'month' and months %}
+<div class="date-bar">
+  <span class="date-bar-label">Month</span>
+  <div class="date-chips">
+    {% for m in months[:12] %}
+      <a href="{{ url_for('signalmash.reports', view='month', month=m.month) }}"
+         class="date-chip {% if m.month == selected_month %}active{% endif %}">
+        {{ m.month }}<span style="opacity:.55; font-size:11px;"> ({{ "{:,}".format(m.count) }})</span>
+      </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="month">
+    <input type="month" name="month" value="{{ selected_month or '' }}" onchange="this.form.submit()">
+  </form>
+</div>
 {% endif %}
 
 {% if companies %}
@@ -55,8 +94,8 @@
       <tr>
         <td style="font-weight:500;">{{ c.name }}</td>
         <td class="mono" style="text-align:right">{{ "{:,}".format(c.total) }}</td>
-        <td class="mono" style="text-align:right; color:#4ade80">{{ "{:,}".format(c.delivered) }}</td>
-        <td class="mono" style="text-align:right; color:#f87171">{{ "{:,}".format(c.failed) }}</td>
+        <td class="mono" style="text-align:right; color:var(--green)">{{ "{:,}".format(c.delivered) }}</td>
+        <td class="mono" style="text-align:right; color:var(--red)">{{ "{:,}".format(c.failed) }}</td>
         <td style="text-align:right">
           <span class="badge {% if c.delivered_rate >= 95 %}badge-delivered{% elif c.delivered_rate >= 80 %}badge-other{% else %}badge-failed{% endif %}">
             {{ c.delivered_rate }}%
@@ -68,7 +107,7 @@
           </span>
         </td>
         <td>
-          <a href="{{ url_for('signalmash.report', slug=c.slug, date=selected_date) }}"
+          <a href="{{ url_for('signalmash.report', slug=c.slug, view=view, date=selected_date or '', month=selected_month or '') }}"
              class="btn btn-ghost" style="padding:4px 12px; font-size:12px;">View →</a>
         </td>
       </tr>

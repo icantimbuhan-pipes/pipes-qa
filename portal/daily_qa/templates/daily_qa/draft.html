@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+{% block title %}Report Draft — {{ session['checklist_name'] }}{% endblock %}
+{% block breadcrumb %}Report Draft{% endblock %}
+{% block page_class %}page{% endblock %}
+
+{% block content %}
+
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">
+      <a href="{{ url_for('daily_qa.summary', session_id=session_id) }}"
+         style="color:var(--text-muted); text-decoration:none;">← Summary</a>
+      <span style="margin:0 6px;">›</span> Report Draft
+    </div>
+    <h1>Preview &amp; Send Report</h1>
+    <p style="margin:0; font-size:13px; color:var(--text-muted);">
+      {{ session['checklist_name'] }} — fill in the fields, draft updates live.
+    </p>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <button onclick="refreshTime(this)" class="btn btn-ghost" style="font-size:12px; padding:6px 14px;">
+      🔄 Refresh time &amp; Khomp
+    </button>
+    <a href="{{ url_for('daily_qa.summary', session_id=session_id) }}" class="btn btn-ghost">← Back</a>
+  </div>
+</div>
+
+<form id="send-form" method="post" action="{{ url_for('daily_qa.draft', session_id=session_id) }}">
+<input type="hidden" name="action"     id="form-action" value="send">
+<input type="hidden" name="draft_text" id="draft-input">
+
+<div style="display:grid; grid-template-columns:1fr 380px; gap:20px; align-items:start;">
+
+  <!-- ── LEFT: Quick Fill ── -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    {# ── Report Header ── #}
+    <div class="card">
+      <div class="card-title">📅 Report Header</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+          <label>Date (Eastern)</label>
+          <input id="f_date" type="text" value="{{ date_str }}" oninput="buildDraft()"
+                 style="font-family:var(--mono);">
+        </div>
+        <div>
+          <label>Time (Eastern)</label>
+          <input id="f_time" type="text" value="{{ time_str }}" oninput="buildDraft()"
+                 placeholder="10:56 AM" style="font-family:var(--mono);">
+        </div>
+      </div>
+    </div>
+
+    {# ── Khomp Peak ── #}
+    <div class="card">
+      <div class="card-title">📈 Khomp Monitoring</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+          <label>Peak calls (number)</label>
+          <input id="f_peak" type="text" placeholder="e.g. 164" oninput="buildDraft()"
+                 style="font-family:var(--mono);">
+        </div>
+        <div>
+          <label>Peak time (Eastern)</label>
+          <input id="f_peak_time" type="text" placeholder="e.g. 09:00 AM" oninput="buildDraft()"
+                 style="font-family:var(--mono);">
+        </div>
+      </div>
+    </div>
+
+    {# ── Provider Statuses ── #}
+    <div class="card">
+      <div class="card-title">📞 Provider Statuses
+        <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:6px;">
+          pre-filled from checklist results
+        </span>
+      </div>
+
+      {% set groups = [
+        ('Outbound Dialing Khomp', [
+          ('ob_khomp_thinq',  'ThinQ'),
+          ('ob_khomp_tbi',    'TBI Telco'),
+          ('ob_khomp_sig',    'Signalmash'),
+        ]),
+        ('Outbound Dialing FS', [
+          ('ob_fs_thinq',  'ThinQ'),
+          ('ob_fs_tbi',    'TBI Telco'),
+          ('ob_fs_sig',    'Signalmash'),
+        ]),
+        ('Inbound Dialling', [
+          ('ib_thinq',  'ThinQ'),
+          ('ib_tbi',    'TBI Telco'),
+          ('ib_sig',    'Signalmash'),
+        ]),
+      ] %}
+
+      {% for group_label, providers in groups %}
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.08em;
+                    text-transform:uppercase; margin-bottom:8px; padding-bottom:6px;
+                    border-bottom:1px solid var(--border-light);">
+          {{ group_label }}
+        </div>
+        {% for pid, pname in providers %}
+        <div style="display:grid; grid-template-columns:90px 1fr; gap:8px; align-items:start; margin-bottom:8px;">
+          <div style="font-size:13px; font-weight:500; padding-top:9px; color:var(--text-secondary);">
+            {{ pname }}
+          </div>
+          <div>
+            <select id="{{ pid }}" onchange="onStatusChange(this)" style="margin-bottom:0;">
+              <option value="working">✅ Working</option>
+              <option value="ongoing">⚠️ Ongoing issue</option>
+              <option value="custom">📝 Custom note…</option>
+              <option value="not_tested">— Not tested</option>
+            </select>
+            <input id="{{ pid }}_note" type="text" placeholder="Describe the issue…"
+                   style="display:none; margin-top:6px; font-size:12px;" oninput="buildDraft()">
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+
+      {# ── Other checks ── #}
+      <div style="font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.08em;
+                  text-transform:uppercase; margin-bottom:10px; padding-bottom:6px;
+                  border-bottom:1px solid var(--border-light);">
+        Other Checks
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <label style="font-size:11px;">Keypress Actions</label>
+          <select id="f_kp" oninput="buildDraft()">
+            <option value="working">✅ Working</option>
+            <option value="issues">⚠️ Issues detected</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;">SMS Opt Out</label>
+          <select id="f_sms" oninput="buildDraft()">
+            <option value="working">✅ Working — Lead was DNC'd</option>
+            <option value="issues">⚠️ Issues detected</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;">AI SMS</label>
+          <select id="f_ai_sms" oninput="buildDraft()">
+            <option value="working">✅ Bot responsive &amp; scheduling</option>
+            <option value="issues">⚠️ Issues detected</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;">Dynamic Inserts</label>
+          <select id="f_dyn" oninput="buildDraft()">
+            <option value="working">✅ Working</option>
+            <option value="issues">⚠️ Issues detected</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label style="font-size:11px;">RetellAI</label>
+        <select id="f_retell" onchange="onStatusChange(this)" oninput="buildDraft()">
+          <option value="responsive">✅ Responsive — transfer &amp; post-call OK</option>
+          <option value="issues">⚠️ Issues detected (custom)</option>
+          <option value="not_tested">— Not tested</option>
+        </select>
+        <input id="f_retell_note" type="text" placeholder="Describe RetellAI issue…"
+               style="display:none; margin-top:6px; font-size:12px;" oninput="buildDraft()">
+      </div>
+    </div>
+
+    {# ── Latency ── #}
+    <div class="card">
+      <div class="card-title">⚡ RetellAI Latency</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        One measurement per line — just the number (e.g. <code>4.29</code>).
+        Auto-formats as "4.29 secs hello to play greeting (Google Voice)".
+      </p>
+      <textarea id="f_latency" rows="4" oninput="buildDraft()"
+                placeholder="4.29&#10;4.31&#10;4.39"
+                style="font-family:var(--mono); font-size:13px; resize:vertical;">{{ lat_prefill }}</textarea>
+    </div>
+
+    {# ── Monitoring Data ── #}
+    <div class="card">
+      <div class="card-title">🔍 Monitoring Data</div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <label>Rollbar Errors</label>
+          <input id="f_rollbar" type="text"
+                 placeholder="No errors in Production for last hour"
+                 oninput="buildDraft()">
+        </div>
+        <div>
+          <label>
+            Khomp Classification (last 8hrs.)
+            <button type="button" onclick="refreshKhompClass(this)"
+                    style="font-size:10px; background:transparent; border:1px solid var(--border);
+                           border-radius:4px; padding:1px 7px; cursor:pointer; color:var(--text-muted);
+                           margin-left:6px;">🔄 Refresh</button>
+          </label>
+          <input id="f_khomp_class" type="text"
+                 value="{{ khomp_class }}"
+                 oninput="buildDraft()"
+                 style="font-family:var(--mono); font-size:12px;">
+          <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">
+            Auto-fetched from Google Sheet. Leave blank to omit on weekends.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Zapier ── #}
+    <div class="card">
+      <div class="card-title">⚡ Zapier</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label>Task Usage</label>
+          <input id="f_zap_usage" type="text" placeholder="e.g. 7,972/50k"
+                 oninput="buildDraft()" style="font-family:var(--mono);">
+        </div>
+        <div>
+          <label>Resets in</label>
+          <select id="f_zap_reset" oninput="buildDraft()">
+            <option value="1 week">1 week</option>
+            <option value="2 weeks">2 weeks</option>
+            <option value="3 weeks" selected>3 weeks</option>
+            <option value="4 weeks">4 weeks</option>
+            <option value="1 month">1 month</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>Zap Runs</label>
+        <select id="f_zap_runs" onchange="onStatusChange(this)" oninput="buildDraft()">
+          <option value="vivint">Error ( POST Vivint Facebook Lead Ads to Pipes )</option>
+          <option value="ok">Running normally</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input id="f_zap_runs_note" type="text" placeholder="Describe the zap issue…"
+               style="display:none; margin-top:6px; font-size:12px;" oninput="buildDraft()">
+      </div>
+      <div>
+        <label>Action Needed</label>
+        <input id="f_zap_action" type="text" value="None" oninput="buildDraft()">
+      </div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- ── RIGHT: Live Draft ── -->
+  <div style="position:sticky; top:80px; display:flex; flex-direction:column; gap:12px;">
+    <div class="card" style="padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div class="card-title" style="margin-bottom:0;">📋 Live Draft</div>
+        <button type="button" onclick="copyDraft(this)"
+                class="btn btn-ghost" style="font-size:11px; padding:4px 12px;">Copy</button>
+      </div>
+      <textarea id="draft-ta" rows="36"
+                oninput="syncDraftInput()"
+                style="font-family:var(--mono); font-size:11.5px; line-height:1.6;
+                       resize:none; border-radius:8px;
+                       border:1px solid var(--border); padding:12px;
+                       background:var(--surface2);"></textarea>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button type="button" onclick="submitSave(this)" class="btn btn-ghost" style="flex:1; justify-content:center;">
+          💾 Save
+        </button>
+        <button type="button" onclick="submitSend(this)" class="btn btn-primary" style="flex:1; justify-content:center;">
+          📤 Send to Slack
+        </button>
+      </div>
+      <div id="send-status" style="font-size:12px; text-align:center; margin-top:8px; min-height:18px;"></div>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+</form>
+
+<style>
+  @media (max-width: 900px) {
+    .page { display: block !important; }
+    div[style*="grid-template-columns:1fr 380px"] {
+      grid-template-columns: 1fr !important;
+    }
+    div[style*="position:sticky"] { position: static !important; }
+  }
+  code {
+    background: var(--surface2); padding: 1px 5px; border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; color: var(--purple);
+  }
+</style>
+
+<script>
+// ── Pre-filled statuses from checklist results ────────────────────────────────
+const PS = JSON.parse('{{ provider_statuses | safe }}');
+const REPORT_TYPE = '{{ session["report_type"] }}';
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+const W = 'Working (Transfer, End Call, DNC, Reschedule)';
+
+function statusLine(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return '[not tested]';
+  const v = sel.value;
+  if (v === 'working')    return W;
+  if (v === 'ongoing')    return 'Ongoing issue with outbound dialing.';
+  if (v === 'not_tested') return '[not tested]';
+  if (v === 'custom') {
+    const n = (document.getElementById(id + '_note')?.value || '').trim();
+    return n ? `Ongoing issue — ${n}` : 'Ongoing issue with outbound dialing.';
+  }
+  return '[not tested]';
+}
+
+function onStatusChange(sel) {
+  const note = document.getElementById(sel.id + '_note');
+  if (note) {
+    const show = sel.value === 'custom' || sel.value === 'issues';
+    note.style.display = show ? 'block' : 'none';
+  }
+  buildDraft();
+}
+
+// ── Build draft ───────────────────────────────────────────────────────────────
+function buildDraft() {
+  const date = v('f_date') || '{{ date_str }}';
+  const time = v('f_time') || '{{ time_str }}';
+  const header = REPORT_TYPE === 'hourly'
+    ? `Hourly Monitoring Checklist Updates - ${date} as of ${time} Eastern Time`
+    : `Daily QA Report - ${date} as of ${time} Eastern Time`;
+
+  const peak     = v('f_peak')      || '[PEAK]';
+  const peakTime = v('f_peak_time') || '[HH:MM AM/PM]';
+
+  // RetellAI
+  const retellV = document.getElementById('f_retell')?.value;
+  let retellLine;
+  if (retellV === 'responsive') {
+    retellLine = 'RetellAI test agent is responsive. Transfer is working and post-call analysis are getting passed correctly.';
+  } else if (retellV === 'not_tested') {
+    retellLine = 'RetellAI — [not tested]';
+  } else {
+    const n = (v('f_retell_note')).trim();
+    retellLine = n ? `RetellAI — Issues detected. ${n}` : 'RetellAI — Issues detected.';
+  }
+
+  const kpLine  = v('f_kp')     === 'working' ? 'Working' : 'Issues detected';
+  const smsLine = v('f_sms')    === 'working'
+    ? "Working - Lead was DNC'd accordingly"
+    : 'Issues detected — check SMS suppression';
+  const aiLine  = v('f_ai_sms') === 'working' ? 'Bot is responsive and scheduling calls' : 'Issues detected';
+  const dynLine = v('f_dyn')    === 'working' ? 'Working' : 'Issues detected';
+
+  // Latency
+  const latRaw   = v('f_latency').trim();
+  const latLines = [];
+  if (latRaw) {
+    latRaw.split('\n').forEach(l => {
+      l = l.trim(); if (!l) return;
+      const n = parseFloat(l);
+      latLines.push(isNaN(n) ? l : `${n.toFixed(2)} secs hello to play greeting (Google Voice)`);
+    });
+  }
+
+  const rollbar    = v('f_rollbar').trim()     || 'No errors in Production for last hour';
+  const khompClass = v('f_khomp_class').trim();
+
+  const zapUsage = v('f_zap_usage').trim() || '[X,XXX/50k]';
+  const zapReset = v('f_zap_reset').trim() || '3 weeks';
+  const zapRunsV = document.getElementById('f_zap_runs')?.value;
+  let zapRunsStr;
+  if (zapRunsV === 'vivint') zapRunsStr = 'Error ( POST Vivint Facebook Lead Ads to Pipes )';
+  else if (zapRunsV === 'ok') zapRunsStr = 'Running normally';
+  else zapRunsStr = v('f_zap_runs_note').trim() || 'Running normally';
+  const zapAction = v('f_zap_action').trim() || 'None';
+
+  const lines = [
+    header,
+    '',
+    `Khomp monitoring - peak ${peak} at ${peakTime} Eastern.`,
+    '',
+    'Outbound Dialing Khomp:',
+    `ThinQ - ${statusLine('ob_khomp_thinq')}`,
+    `TBI Telco - ${statusLine('ob_khomp_tbi')}`,
+    `Signalmash - ${statusLine('ob_khomp_sig')}`,
+    '',
+    'Outbound Dialing FS:',
+    `ThinQ - ${statusLine('ob_fs_thinq')}`,
+    `TBI Telco - ${statusLine('ob_fs_tbi')}`,
+    `Signalmash - ${statusLine('ob_fs_sig')}`,
+    '',
+    'Inbound Dialling:',
+    `• ThinQ - ${statusLine('ib_thinq')}`,
+    `• TBI Telco - ${statusLine('ib_tbi')}`,
+    `• Signalmash - ${statusLine('ib_sig')}`,
+    `Keypress Actions: ${kpLine}`,
+    `SMS Opt Out ${smsLine}`,
+    `AI SMS - ${aiLine}`,
+    `Dynamic Inserts - ${dynLine}`,
+    retellLine,
+    'Outbound RetellAI Call latency with Khomp AMD in Production.',
+    '',
+    ...(latLines.length ? latLines : ['[LATENCY]']),
+    '',
+    `Rollbar Errors: ${rollbar}`,
+    ...(khompClass ? [`Khomp Classification (last 8hrs.): ${khompClass}`] : []),
+    'Zapier:',
+    `Task Usage: ${zapUsage} Usage resets in ${zapReset}.`,
+    `Zap runs: ${zapRunsStr}`,
+    `Action Needed : ${zapAction}`,
+  ];
+
+  document.getElementById('draft-ta').value = lines.join('\n');
+  syncDraftInput();
+}
+
+function v(id) {
+  return document.getElementById(id)?.value ?? '';
+}
+
+function syncDraftInput() {
+  document.getElementById('draft-input').value = document.getElementById('draft-ta').value;
+}
+
+// ── Refresh time + khomp from server ─────────────────────────────────────────
+async function refreshTime(btn) {
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '…';
+  try {
+    const r    = await fetch('{{ url_for("quick_report.refresh") }}');
+    const data = await r.json();
+    document.getElementById('f_date').value        = data.date_str;
+    document.getElementById('f_time').value        = data.time_str;
+    document.getElementById('f_khomp_class').value = data.khomp_class;
+    buildDraft();
+  } catch(e) { alert('Refresh failed: ' + e.message); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+async function refreshKhompClass(btn) {
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '…';
+  try {
+    const r    = await fetch('{{ url_for("quick_report.refresh") }}');
+    const data = await r.json();
+    document.getElementById('f_khomp_class').value = data.khomp_class;
+    buildDraft();
+  } catch(e) {}
+  btn.disabled = false; btn.textContent = orig;
+}
+
+// form.action is shadowed by the hidden input named "action" in some browsers
+// — always use getAttribute to get the real URL.
+const FORM_URL = document.getElementById('send-form').getAttribute('action');
+
+// ── Send to Slack (fetch, no page reload) ─────────────────────────────────────
+function submitSend(btn) {
+  syncDraftInput();
+  document.getElementById('form-action').value = 'send';
+  const status = document.getElementById('send-status');
+  status.style.color = 'var(--text-muted)';
+  status.textContent = 'Sending…';
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '…';
+
+  const form = document.getElementById('send-form');
+  fetch(FORM_URL, {
+    method: 'POST',
+    body: new FormData(form),
+  }).then(r => {
+    if (r.ok) {
+      status.style.color = 'var(--green)';
+      status.textContent = '✓ Sent to Slack!';
+    } else {
+      status.style.color = 'var(--red)';
+      status.textContent = '✕ Send failed — check webhook URL in .env';
+    }
+    btn.disabled = false; btn.textContent = orig;
+    setTimeout(() => status.textContent = '', 5000);
+  }).catch(e => {
+    status.style.color = 'var(--red)';
+    status.textContent = '✕ ' + e.message;
+    btn.disabled = false; btn.textContent = orig;
+  });
+}
+
+// ── Save draft ────────────────────────────────────────────────────────────────
+function submitSave(btn) {
+  syncDraftInput();
+  document.getElementById('form-action').value = 'save';
+  const status = document.getElementById('send-status');
+  status.style.color = 'var(--text-muted)';
+  status.textContent = 'Saving…';
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '…';
+
+  const form = document.getElementById('send-form');
+  fetch(FORM_URL, {
+    method: 'POST',
+    body: new FormData(form),
+  }).then(r => {
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ Draft saved.';
+    btn.disabled = false; btn.textContent = orig;
+    setTimeout(() => status.textContent = '', 3000);
+  }).catch(e => {
+    status.style.color = 'var(--red)';
+    status.textContent = '✕ ' + e.message;
+    btn.disabled = false; btn.textContent = orig;
+  });
+}
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+function copyDraft(btn) {
+  navigator.clipboard.writeText(document.getElementById('draft-ta').value).then(() => {
+    const orig = btn.textContent; btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+// ── Init: apply pre-filled statuses from checklist ───────────────────────────
+(function initStatuses() {
+  for (const [id, s] of Object.entries(PS)) {
+    const sel = document.getElementById(id);
+    if (sel) sel.value = s.value;
+    const noteEl = document.getElementById(id + '_note');
+    if (noteEl && s.note) {
+      noteEl.value = s.note;
+    }
+    if (noteEl && (s.value === 'custom' || s.value === 'issues')) {
+      noteEl.style.display = 'block';
+    }
+  }
+  buildDraft();
+})();
+</script>
+
+{% endblock %}

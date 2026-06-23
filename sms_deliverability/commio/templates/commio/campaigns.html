@@ -1,0 +1,170 @@
+{% extends "commio/base.html" %}
+{% block title %}Campaign ID Checker{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('commio.reports') }}" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">← Reports</a>
+  <div class="page-header" style="margin-bottom:0;">
+    <h1>Campaign ID Checker</h1>
+    <p>Cross-provider validation — verify campaign IDs are consistent across Telgorithm, Signalmash, and Commio.</p>
+  </div>
+</div>
+
+{# ── Search ── #}
+<form method="get" style="display:flex; gap:8px; margin-bottom:24px; max-width:480px;">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search by campaign ID or company name…"
+         style="flex:1;">
+  <button type="submit" class="btn btn-primary" style="padding:7px 18px;">Search</button>
+  {% if query %}
+    <a href="{{ url_for('commio.campaigns') }}" class="btn btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+{# ── Summary ── #}
+<div style="display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+  <div class="stat" style="padding:10px 18px;">
+    <div class="stat-value" style="font-size:18px;">{{ total_ids }}</div>
+    <div class="stat-label">Total Campaign IDs</div>
+  </div>
+  <div class="stat" style="padding:10px 18px; border-color:{% if complete == total_ids %}var(--success-border){% else %}var(--border){% endif %};">
+    <div class="stat-value" style="font-size:18px; color:var(--green);">{{ complete }}</div>
+    <div class="stat-label">In all 3 providers</div>
+  </div>
+  {% if incomplete > 0 %}
+  <div class="stat" style="padding:10px 18px; border-color:#fb923c;">
+    <div class="stat-value" style="font-size:18px; color:#fb923c;">{{ incomplete }}</div>
+    <div class="stat-label">Missing from ≥1 provider</div>
+  </div>
+  {% endif %}
+  {% if conflicts > 0 %}
+  <div class="stat" style="padding:10px 18px; border-color:var(--error-border);">
+    <div class="stat-value" style="font-size:18px; color:var(--red);">{{ conflicts }}</div>
+    <div class="stat-label">Name conflicts</div>
+  </div>
+  {% endif %}
+  {% if unmapped %}
+  <div class="stat" style="padding:10px 18px; border-color:var(--error-border);">
+    <div class="stat-value" style="font-size:18px; color:var(--red);">{{ unmapped | length }}</div>
+    <div class="stat-label">Unmapped in Commio DB</div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Cross-provider matrix ── #}
+{% if rows %}
+<h2 style="font-size:15px; font-weight:600; margin-bottom:12px;">
+  {% if query %}Results for "{{ query }}"{% else %}All Campaign IDs{% endif %}
+</h2>
+<div class="table-wrap" style="margin-bottom:32px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Campaign ID</th>
+        <th>Company</th>
+        <th style="text-align:center">Telgorithm</th>
+        <th style="text-align:center">Signalmash</th>
+        <th style="text-align:center">Commio</th>
+        <th style="text-align:center">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      {% set all_ok = r.in_telgorithm and r.in_signalmash and r.in_commio %}
+      <tr>
+        <td class="mono" style="white-space:nowrap;">{{ r.id }}</td>
+        <td style="font-weight:{% if r.conflict %}600{% else %}400{% endif %}; color:{% if r.conflict %}var(--red){% else %}var(--text){% endif %};">
+          {{ r.company }}
+          {% if r.conflict %}<span style="font-size:11px; color:var(--red);"> ⚠ name conflict</span>{% endif %}
+        </td>
+        <td style="text-align:center;">
+          {% if r.in_telgorithm %}
+            <span style="color:var(--green); font-size:16px;">✓</span>
+          {% else %}
+            <span style="color:var(--red); font-size:14px; opacity:.6;">✗</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center;">
+          {% if r.in_signalmash %}
+            <span style="color:var(--green); font-size:16px;">✓</span>
+          {% else %}
+            <span style="color:var(--red); font-size:14px; opacity:.6;">✗</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center;">
+          {% if r.in_commio %}
+            <span style="color:var(--green); font-size:16px;">✓</span>
+          {% else %}
+            <span style="color:var(--red); font-size:14px; opacity:.6;">✗</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center;">
+          {% if r.conflict %}
+            <span class="badge badge-failed">Conflict</span>
+          {% elif all_ok %}
+            <span class="badge badge-delivered">OK</span>
+          {% else %}
+            <span class="badge badge-warn">Partial</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif query %}
+<div class="empty-state" style="padding:32px;">
+  <p>No campaign IDs matched <strong>"{{ query }}"</strong>.</p>
+</div>
+{% endif %}
+
+{# ── Unmapped IDs from DB ── #}
+{% if unmapped %}
+<div style="border-top:1px solid var(--border); padding-top:28px; margin-top:8px;">
+  <h2 style="font-size:15px; font-weight:600; margin-bottom:4px; color:var(--red);">
+    ⚠ Unmapped Campaign IDs found in Commio uploads
+  </h2>
+  <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+    These IDs appear in your uploaded Commio MDR CSVs but are not in the campaign map.
+    Add them to <code style="font-family:var(--mono); font-size:12px;">sms_deliverability/commio/campaign_map.py</code>.
+  </p>
+  <div class="table-wrap" style="max-width:480px;">
+    <table>
+      <thead>
+        <tr>
+          <th>Campaign ID</th>
+          <th style="text-align:right">Records</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in unmapped %}
+        <tr>
+          <td class="mono">{{ u.campaign_id }}</td>
+          <td class="mono" style="text-align:right; color:var(--text-muted);">{{ "{:,}".format(u.total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── How to add ── #}
+<div style="margin-top:32px; background:var(--purple-dim); border:1px solid rgba(94,53,177,.2); border-radius:8px; padding:16px 20px; max-width:640px;">
+  <p style="font-size:13px; font-weight:600; color:var(--accent); margin-bottom:8px;">How to add or update a campaign mapping</p>
+  <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+    All three <code style="font-family:var(--mono);">campaign_map.py</code> files share the same list. Edit each one:
+  </p>
+  <pre style="font-family:var(--mono); font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; overflow-x:auto;">sms_deliverability/telgorithm/campaign_map.py
+sms_deliverability/signalmash/campaign_map.py
+sms_deliverability/commio/campaign_map.py
+
+CAMPAIGN_MAP: dict[str, str] = {
+    "CXXXXXXX": "Your Company Name",
+    ...
+}</pre>
+  <p style="font-size:12px; color:var(--text-muted); margin-top:10px;">
+    Restart the portal after editing. New uploads will automatically match to the updated map.
+  </p>
+</div>
+
+{% endblock %}

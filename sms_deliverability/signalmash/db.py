@@ -44,9 +44,18 @@ def init_db() -> None:
 
 # ── Shared WHERE builder ──────────────────────────────────────────────────────
 
-def _date_clause(report_date: Optional[str]) -> tuple[str, list]:
+def _date_clause(
+    report_date: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    month: Optional[str] = None,
+) -> tuple[str, list]:
     if report_date:
         return "AND report_date = ?", [report_date]
+    if date_from and date_to:
+        return "AND report_date BETWEEN ? AND ?", [date_from, date_to]
+    if month:
+        return "AND report_date LIKE ?", [f"{month}-%"]
     return "", []
 
 
@@ -62,8 +71,8 @@ def get_available_dates(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """).fetchall()
 
 
-def get_companies(conn: sqlite3.Connection, report_date: Optional[str] = None) -> list[sqlite3.Row]:
-    clause, params = _date_clause(report_date)
+def get_companies(conn: sqlite3.Connection, **kw) -> list[sqlite3.Row]:
+    clause, params = _date_clause(**kw)
     return conn.execute(f"""
         SELECT
             company_name,
@@ -80,9 +89,9 @@ def get_companies(conn: sqlite3.Connection, report_date: Optional[str] = None) -
 def get_company_stats(
     conn: sqlite3.Connection,
     company_name: str,
-    report_date: Optional[str] = None,
+    **kw,
 ) -> Optional[sqlite3.Row]:
-    clause, params = _date_clause(report_date)
+    clause, params = _date_clause(**kw)
     return conn.execute(f"""
         SELECT
             company_name,
@@ -98,9 +107,9 @@ def get_company_stats(
 def get_failure_breakdown(
     conn: sqlite3.Connection,
     company_name: str,
-    report_date: Optional[str] = None,
+    **kw,
 ) -> list[sqlite3.Row]:
-    clause, params = _date_clause(report_date)
+    clause, params = _date_clause(**kw)
     return conn.execute(f"""
         SELECT
             COALESCE(NULLIF(trim(operator), ''), 'Unknown')   AS carrier,
@@ -119,9 +128,9 @@ def get_company_records(
     company_name: str,
     limit: int = 200,
     offset: int = 0,
-    report_date: Optional[str] = None,
+    **kw,
 ) -> list[sqlite3.Row]:
-    clause, params = _date_clause(report_date)
+    clause, params = _date_clause(**kw)
     return conn.execute(
         f"SELECT * FROM signalmash_records WHERE company_name = ? {clause} ORDER BY id DESC LIMIT ? OFFSET ?",
         [company_name] + params + [limit, offset],
@@ -131,9 +140,9 @@ def get_company_records(
 def count_company_records(
     conn: sqlite3.Connection,
     company_name: str,
-    report_date: Optional[str] = None,
+    **kw,
 ) -> int:
-    clause, params = _date_clause(report_date)
+    clause, params = _date_clause(**kw)
     return conn.execute(
         f"SELECT COUNT(*) FROM signalmash_records WHERE company_name = ? {clause}",
         [company_name] + params,

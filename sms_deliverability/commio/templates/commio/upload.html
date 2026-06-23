@@ -1,0 +1,93 @@
+{% extends "commio/base.html" %}
+{% block title %}Upload — Commio{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('commio.reports') }}" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">← Reports</a>
+  <div class="page-header" style="margin-bottom:0;">
+    <h1>Commio — Upload MDR CSV</h1>
+    <p>Import a Commio Message Detail Record export. Records are appended to the database on each upload.</p>
+  </div>
+</div>
+
+<div class="card" style="max-width: 640px;">
+  <form method="post" enctype="multipart/form-data" id="upload-form">
+
+    <div style="margin-bottom: 20px;">
+      <label for="report_date">Report Date</label>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+        The date this CSV covers. Defaults to today — change it if you're importing a previous day.
+      </p>
+      <input type="date" name="report_date" id="report_date" value="{{ today }}"
+             style="width:180px; padding:8px 12px; font-size:14px;">
+    </div>
+
+    <label for="csv_file">CSV File</label>
+    <div class="file-zone" id="drop-zone">
+      <input type="file" name="csv_file" id="csv_file" accept=".csv">
+      <div class="file-zone-icon">📂</div>
+      <div class="file-zone-label">Drop a Commio MDR CSV here or click to browse</div>
+      <div class="file-zone-sub">UTF-8 encoded · Max 32 MB · Filename: MDRs-*.csv</div>
+      <div class="file-name-display" id="file-name"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;">Required columns</p>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">These 3 columns must be present. All other Commio MDR columns are optional.</p>
+      <div class="hint-grid">
+        {% for col in ["delivery_status_code", "created", "campaign_id"] %}
+          <span class="hint-tag">{{ col }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top: 16px; background: var(--purple-dim); border: 1px solid rgba(94,53,177,.2); border-radius: var(--radius-sm); padding: 12px 16px;">
+      <p style="font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 8px;">Status Codes</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px;">
+        {% for code, label in [
+          ("200", "Delivered"),
+          ("005", "Undeliverable"),
+          ("600", "Unregistered Traffic"),
+          ("700", "Opt Out Filtered"),
+          ("800", "Carrier Blocked"),
+          ("900", "Carrier Disabled")
+        ] %}
+        <div style="font-size: 12px; color: var(--text-muted);">
+          <span style="font-family: var(--mono); color: {% if code == '200' %}var(--green){% else %}var(--red){% endif %};">{{ code }}</span>
+          <span style="margin-left: 6px;">{{ label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; gap: 10px; align-items: center;">
+      <button type="submit" class="btn btn-primary">
+        <span>↑</span> Import Records
+      </button>
+      <a href="{{ url_for('commio.reports') }}" class="btn btn-ghost">View Reports</a>
+      <a href="{{ url_for('commio.campaigns') }}" class="btn btn-ghost">Campaigns</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  const input = document.getElementById('csv_file');
+  const display = document.getElementById('file-name');
+  const zone = document.getElementById('drop-zone');
+
+  input.addEventListener('change', () => {
+    display.textContent = input.files[0]?.name || '';
+  });
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      display.textContent = e.dataTransfer.files[0].name;
+    }
+  });
+</script>
+{% endblock %}

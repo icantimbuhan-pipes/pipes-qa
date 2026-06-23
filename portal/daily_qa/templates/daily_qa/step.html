@@ -4,10 +4,21 @@
 
 {% block content %}
 
-{# ── Back + Progress ── #}
-<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-  <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Back</a>
-  <span style="font-size:12px; color:var(--text-muted);">{{ session['checklist_name'] }}</span>
+{# ── Back + Retrigger + Session name ── #}
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+  {% if item_num > 0 %}
+  <a href="{{ url_for('daily_qa.step', session_id=session['id'], n=item_num - 1) }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px; flex-shrink:0;">← Back</a>
+  {% else %}
+  <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px; flex-shrink:0;">← Back</a>
+  {% endif %}
+
+  <button type="button" id="retrigger-top-btn" onclick="triggerCall('{{ provider_key }}', this, 'top')"
+          class="btn btn-ghost" style="padding:6px 14px; font-size:13px; flex-shrink:0; border-color:rgba(91,106,240,.35); color:var(--accent);">
+    📞 Retrigger
+  </button>
+  <span id="trigger-top-status" style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
+
+  <span style="font-size:12px; color:var(--text-muted); margin-left:auto; flex-shrink:0;">{{ session['checklist_name'] }}</span>
 </div>
 
 <div style="margin-bottom:28px;">
@@ -26,8 +37,8 @@
   {{ item.section_title }}
 </div>
 
-{# ── Call trigger (section-level, first item in section) ── #}
-{% if item.is_first_in_section and item.section_trigger_call and item.section_instruction %}
+{# ── Call trigger (section-level, shown on every item that needs a call) ── #}
+{% if item.section_trigger_call and item.section_instruction %}
 <div id="trigger-section" style="
   background: rgba(91,106,240,.07); border: 1px solid rgba(91,106,240,.2);
   border-radius:10px; padding:16px; margin-bottom:20px;
@@ -35,11 +46,13 @@
   <div style="display:flex; align-items:flex-start; gap:12px;">
     <span style="font-size:20px; margin-top:1px;">📞</span>
     <div style="flex:1;">
-      <div style="font-size:13px; font-weight:600; margin-bottom:4px;">Trigger a call before this section</div>
+      <div style="font-size:13px; font-weight:600; margin-bottom:4px;">
+        {% if item.is_first_in_section %}Trigger a call before this section{% else %}Retrigger a call for this step{% endif %}
+      </div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">{{ item.section_instruction }}</div>
       <button type="button" class="btn btn-primary" style="font-size:13px;"
               onclick="triggerCall('{{ provider_key }}', this, 'section')">
-        📞 Trigger Call
+        📞 {% if item.is_first_in_section %}Trigger Call{% else %}Retrigger Call{% endif %}
       </button>
       <span id="trigger-section-status" style="margin-left:12px; font-size:12px; color:var(--text-muted);"></span>
     </div>
@@ -148,6 +161,24 @@
     </button>
   </div>
 
+  {# Latency input — RetellAI / AMD steps only #}
+  {% if item.show_latency %}
+  <div style="margin-bottom:16px;">
+    <label style="font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.04em;
+                  text-transform:uppercase; display:block; margin-bottom:6px;">
+      📡 RetellAI Latency Measurements
+    </label>
+    <textarea name="latency_note" rows="3"
+              placeholder="One reading per line, e.g.&#10;4.21&#10;4.55&#10;4.12"
+              style="width:100%; background:var(--bg); border:1px solid rgba(91,106,240,.35);
+                     color:var(--text); border-radius:7px; padding:9px 12px;
+                     font-size:13px; font-family:var(--mono); resize:vertical;"></textarea>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+      Enter seconds per call (one per line). Used in the report as latency data.
+    </div>
+  </div>
+  {% endif %}
+
   {# Note field (revealed on Fail) #}
   <div id="note-field" style="display:none; margin-bottom:16px;">
     <label for="note">Note <span style="font-weight:400; color:var(--text-muted);">(describe the issue)</span></label>
@@ -214,16 +245,40 @@
       });
       const data = await res.json();
       if (data.ok) {
-        btn.textContent = '✓ Call Sent';
-        btn.style.background = 'var(--green-bg)';
-        btn.style.borderColor = 'var(--green-border)';
-        btn.style.color = 'var(--green)';
+        // Show API acceptance / rejection status
+        let statusMsg, statusColor;
+        if (data.rejection) {
+          statusMsg   = `⚠ ${data.rejection}`;
+          statusColor = 'var(--yellow)';
+          btn.textContent = '✓ Sent';
+          btn.style.background  = 'rgba(251,191,36,.15)';
+          btn.style.borderColor = 'rgba(251,191,36,.4)';
+          btn.style.color       = 'var(--yellow)';
+        } else {
+          statusMsg   = `✓ ${data.http_code || 200} — Call triggered, answer your phone.`;
+          statusColor = 'var(--green)';
+          btn.textContent = '✓ Call Sent';
+          btn.style.background  = 'var(--green-bg)';
+          btn.style.borderColor = 'var(--green-border)';
+          btn.style.color       = 'var(--green)';
+        }
         if (statusEl) {
-          statusEl.textContent = 'Call triggered — answer your phone.';
-          statusEl.style.color = 'var(--green)';
+          statusEl.textContent = statusMsg;
+          statusEl.style.color = statusColor;
+        }
+        // Re-enable top retrigger button after 5s
+        if (label === 'top') {
+          setTimeout(() => {
+            btn.textContent = '📞 Retrigger';
+            btn.style.background  = '';
+            btn.style.borderColor = 'rgba(91,106,240,.35)';
+            btn.style.color       = 'var(--accent)';
+            btn.disabled = false;
+            if (statusEl) statusEl.textContent = '';
+          }, 6000);
         }
       } else {
-        btn.textContent = '✗ Failed';
+        btn.textContent = label === 'top' ? '📞 Retrigger' : '✗ Failed';
         btn.disabled = false;
         if (statusEl) {
           statusEl.textContent = data.error || 'Unknown error';

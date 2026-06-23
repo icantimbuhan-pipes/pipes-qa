@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}{% if checklist %}Edit{% else %}New{% endif %} Checklist — Pipes.QA Portal{% endblock %}
+{% block page_class %}page{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="{{ url_for('checklists.index') }}" class="btn btn-ghost" style="padding:6px 14px; font-size:13px;">← Checklists</a>
+  <h1 style="font-size:20px; font-weight:700;">
+    {% if checklist %}Edit: {{ checklist.name }}{% else %}New Checklist{% endif %}
+  </h1>
+</div>
+
+<form id="cl-form" method="post"
+      action="{% if checklist %}{{ url_for('checklists.save', checklist_id=checklist.id) }}{% else %}{{ url_for('checklists.save') }}{% endif %}">
+
+  {# ── Meta card ── #}
+  <div class="card" style="margin-bottom:20px; padding:20px;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px;">
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.05em; text-transform:uppercase;">
+          Checklist Name *
+        </label>
+        <input type="text" name="name" required
+               value="{{ checklist.name if checklist else '' }}"
+               placeholder="e.g. Daily QA — Lite Khomp"
+               style="margin-top:4px; width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:8px 11px; font-size:14px;">
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.05em; text-transform:uppercase;">
+          Report Type
+        </label>
+        <select name="report_type"
+                style="margin-top:4px; width:100%; background:var(--bg); border:1px solid var(--border);
+                       color:var(--text); border-radius:6px; padding:8px 11px; font-size:14px; cursor:pointer;">
+          <option value="daily"  {% if not checklist or checklist.report_type == 'daily' %}selected{% endif %}>Daily QA</option>
+          <option value="hourly" {% if checklist and checklist.report_type == 'hourly' %}selected{% endif %}>Hourly Monitoring</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.05em; text-transform:uppercase;">
+          Default Provider
+        </label>
+        <select name="default_provider"
+                style="margin-top:4px; width:100%; background:var(--bg); border:1px solid var(--border);
+                       color:var(--text); border-radius:6px; padding:8px 11px; font-size:14px; cursor:pointer;">
+          {% for p in providers %}
+          <option value="{{ p.key }}"
+                  {% if checklist and checklist.default_provider == p.key %}selected{% endif %}>
+            {{ p.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  {# ── Sections ── #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+    <h2 style="font-size:15px; font-weight:600;">Sections &amp; Items</h2>
+    <button type="button" onclick="addSection()" class="btn btn-primary" style="font-size:13px; padding:7px 16px;">
+      + Add Section
+    </button>
+  </div>
+
+  <div id="sections-container" style="display:flex; flex-direction:column; gap:14px; margin-bottom:24px;">
+    <div id="empty-state" style="text-align:center; padding:40px 24px; color:var(--text-muted);
+                                  border:1px dashed var(--border); border-radius:10px; display:none;">
+      No sections yet. Click <strong>+ Add Section</strong> to start building your checklist.
+    </div>
+  </div>
+
+  <input type="hidden" name="sections_json" id="sections-input" value="{{ sections_json }}">
+
+  <div style="display:flex; gap:10px; margin-bottom:32px;">
+    <button type="button" onclick="submitForm()" class="btn btn-primary">
+      💾 Save Checklist
+    </button>
+    <a href="{{ url_for('checklists.index') }}" class="btn btn-ghost">Cancel</a>
+  </div>
+
+</form>
+
+<style>
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section-head {
+    background: rgba(91,106,240,.07);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .section-body { padding: 16px; }
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  @media (max-width: 600px) {
+    .item-row { grid-template-columns: 1fr auto; }
+    .item-row .item-note { display: none; }
+  }
+  .field-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: var(--font);
+  }
+  .field-input:focus { outline: none; border-color: var(--accent); }
+  .btn-icon {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+    transition: background .15s, color .15s;
+  }
+  .btn-icon:hover { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+  .toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-label input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
+</style>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────────
+  let sections = {{ sections_json|safe }};
+  const PROVIDERS = [
+    {key: '',                   name: '— same as checklist default —'},
+    {% for p in providers %}
+    {key: '{{ p.key }}', name: '{{ p.name }}'},
+    {% endfor %}
+  ];
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  function render() {
+    const container = document.getElementById('sections-container');
+    const empty     = document.getElementById('empty-state');
+
+    // Keep the empty-state div in the container but toggle visibility
+    empty.style.display = sections.length === 0 ? 'block' : 'none';
+
+    // Remove old section cards (keep empty-state)
+    container.querySelectorAll('.section-card').forEach(el => el.remove());
+
+    sections.forEach((sec, si) => {
+      const el = document.createElement('div');
+      el.className = 'section-card';
+      el.id = `sec-card-${si}`;
+
+      const providerOpts = PROVIDERS.map(p =>
+        `<option value="${p.key}" ${sec.provider_key === p.key ? 'selected' : ''}>${escHtml(p.name)}</option>`
+      ).join('');
+
+      const itemsHTML = sec.items.map((item, ii) => `
+        <div class="item-row">
+          <input class="field-input" type="text" placeholder="Item text…"
+                 value="${escHtml(item.text)}"
+                 oninput="sections[${si}].items[${ii}].text = this.value">
+          <input class="field-input item-note" type="text" placeholder="Note (optional)…"
+                 value="${escHtml(item.note)}"
+                 oninput="sections[${si}].items[${ii}].note = this.value">
+          <button type="button" class="btn-icon" title="Remove item"
+                  onclick="removeItem(${si}, ${ii})">✕</button>
+        </div>
+      `).join('');
+
+      el.innerHTML = `
+        <div class="section-head">
+          <span style="font-size:11px; font-weight:700; color:var(--accent); letter-spacing:.06em;
+                       text-transform:uppercase; flex-shrink:0;">Section ${si + 1}</span>
+          <input class="field-input" type="text" placeholder="Section title…"
+                 value="${escHtml(sec.title)}" style="flex:1; min-width:150px;"
+                 oninput="sections[${si}].title = this.value">
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            ${si > 0 ? `<button type="button" class="btn-icon" title="Move up" onclick="moveSection(${si},-1)">↑</button>` : ''}
+            ${si < sections.length-1 ? `<button type="button" class="btn-icon" title="Move down" onclick="moveSection(${si},1)">↓</button>` : ''}
+            <button type="button" class="btn-icon" title="Remove section"
+                    onclick="removeSection(${si})" style="">✕</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-bottom:14px;">
+            <div>
+              <label class="toggle-label">
+                <input type="checkbox" ${sec.trigger_call_at_start ? 'checked' : ''}
+                       onchange="sections[${si}].trigger_call_at_start = this.checked; toggleInstruction(${si}, this.checked)">
+                Trigger call at section start
+              </label>
+              <div id="instr-${si}" style="margin-top:8px; ${sec.trigger_call_at_start ? '' : 'display:none'}">
+                <input class="field-input" type="text"
+                       placeholder="e.g. Answer your Google Voice and listen…"
+                       value="${escHtml(sec.start_instruction)}"
+                       oninput="sections[${si}].start_instruction = this.value">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                            letter-spacing:.04em; text-transform:uppercase; display:block; margin-bottom:4px;">
+                Section Provider Override
+              </label>
+              <select class="field-input" onchange="sections[${si}].provider_key = this.value">
+                ${providerOpts}
+              </select>
+            </div>
+          </div>
+
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.05em;
+                      text-transform:uppercase; margin-bottom:8px;">Items</div>
+          <div id="items-${si}">
+            ${itemsHTML || '<div style="font-size:12px; color:var(--text-muted); padding:6px 0;">No items yet.</div>'}
+          </div>
+          <button type="button" onclick="addItem(${si})"
+                  class="btn btn-ghost" style="font-size:12px; padding:5px 12px; margin-top:8px;">
+            + Add Item
+          </button>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Section actions ───────────────────────────────────────────────────────────
+  function addSection() {
+    sections.push({
+      id: 'sec_' + Date.now(),
+      title: '',
+      trigger_call_at_start: false,
+      start_instruction: '',
+      provider_key: '',
+      items: [],
+    });
+    render();
+    // Focus the new section's title input
+    const lastCard = document.querySelector('.section-card:last-child');
+    if (lastCard) lastCard.querySelector('input[type="text"]')?.focus();
+  }
+
+  function removeSection(si) {
+    if (!confirm('Remove this section and all its items?')) return;
+    sections.splice(si, 1);
+    render();
+  }
+
+  function moveSection(si, dir) {
+    const target = si + dir;
+    if (target < 0 || target >= sections.length) return;
+    [sections[si], sections[target]] = [sections[target], sections[si]];
+    render();
+  }
+
+  function toggleInstruction(si, show) {
+    const el = document.getElementById(`instr-${si}`);
+    if (el) el.style.display = show ? 'block' : 'none';
+  }
+
+  // ── Item actions ──────────────────────────────────────────────────────────────
+  function addItem(si) {
+    sections[si].items.push({
+      id: 'item_' + Date.now(),
+      text: '',
+      note: '',
+      bullets: [],
+      trigger_call: false,
+      call_instruction: '',
+      sub_calls: [],
+      provider_key: '',
+    });
+    render();
+    // Focus the new item's text input
+    const itemsEl = document.getElementById(`items-${si}`);
+    const lastRow = itemsEl?.querySelectorAll('.item-row');
+    if (lastRow?.length) lastRow[lastRow.length - 1].querySelector('input')?.focus();
+  }
+
+  function removeItem(si, ii) {
+    sections[si].items.splice(ii, 1);
+    render();
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────────
+  function submitForm() {
+    document.getElementById('sections-input').value = JSON.stringify(sections);
+    document.getElementById('cl-form').submit();
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  render();
+</script>
+
+{% endblock %}

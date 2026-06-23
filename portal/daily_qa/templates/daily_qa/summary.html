@@ -35,16 +35,16 @@
          class="btn btn-primary">Resume →</a>
     {% else %}
       {% if not session['slack_sent'] %}
-        <form method="post" action="{{ url_for('daily_qa.send_slack', session_id=session['id']) }}">
-          <button type="submit" class="btn btn-success">📤 Send to Slack</button>
-        </form>
+        <a href="{{ url_for('daily_qa.draft', session_id=session['id']) }}" class="btn btn-success">
+          📝 Preview &amp; Send Report
+        </a>
       {% else %}
         <span class="btn btn-ghost" style="cursor:default; color:var(--green); border-color:var(--green-border);">
           ✓ Slack Sent
         </span>
-        <form method="post" action="{{ url_for('daily_qa.send_slack', session_id=session['id']) }}">
-          <button type="submit" class="btn btn-ghost" style="font-size:12px;">Resend</button>
-        </form>
+        <a href="{{ url_for('daily_qa.draft', session_id=session['id']) }}" class="btn btn-ghost" style="font-size:12px;">
+          Resend / Edit Draft
+        </a>
       {% endif %}
       <a href="{{ url_for('daily_qa.pick') }}" class="btn btn-ghost">New Run</a>
     {% endif %}

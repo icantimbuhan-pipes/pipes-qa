@@ -1,0 +1,252 @@
+{% extends "commio/base.html" %}
+{% block title %}{{ company_name }} — Commio Report{% endblock %}
+
+{% block content %}
+
+{# ── Breadcrumb + actions ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+  <div style="display:flex; align-items:center; gap:10px;">
+    <a href="{{ url_for('commio.reports', view=view, date=selected_date or '', month=selected_month or '') }}"
+       class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">
+      ← Back
+    </a>
+    <span style="font-size:13px; color:var(--text-muted);">
+      <a href="{{ url_for('commio.reports', view=view, date=selected_date or '', month=selected_month or '') }}"
+         style="color:var(--accent); text-decoration:none">Reports</a>
+      <span style="margin:0 8px">›</span>
+      <span>{{ company_name }}</span>
+      {% if label %}<span style="margin:0 8px">›</span><span>{{ label }}</span>{% endif %}
+    </span>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="{{ url_for('commio.download_csv', slug=slug, view=view, date=selected_date or '', month=selected_month or '') }}"
+       class="btn btn-ghost" style="font-size:13px;">
+      ↓ Download CSV
+    </a>
+  </div>
+</div>
+
+<div class="page-header" style="margin-bottom:16px;">
+  <h1>{{ company_name }}</h1>
+  {% if kpi %}
+  <p style="font-family:var(--mono); font-size:12px; margin-top:6px; color:var(--text-muted)">
+    {% for cid in kpi.campaign_ids %}
+      <span style="background:rgba(91,106,240,.1);border:1px solid rgba(91,106,240,.25);padding:2px 8px;border-radius:4px;color:var(--accent);margin-right:4px;">{{ cid }}</span>
+    {% endfor %}
+  </p>
+  {% endif %}
+</div>
+
+{# ── View toggle ── #}
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+  <div class="view-toggle">
+    <a href="{{ url_for('commio.report', slug=slug, view='day', date=selected_date or '') }}"
+       class="view-btn {% if view == 'day' %}active{% endif %}">Day</a>
+    <a href="{{ url_for('commio.report', slug=slug, view='week', date=selected_date or '') }}"
+       class="view-btn {% if view == 'week' %}active{% endif %}">Week</a>
+    <a href="{{ url_for('commio.report', slug=slug, view='month', month=selected_month or '') }}"
+       class="view-btn {% if view == 'month' %}active{% endif %}">Month</a>
+  </div>
+</div>
+
+{# ── Date / week / month bar ── #}
+{% if view == 'day' and available_dates %}
+<div class="date-bar">
+  <span class="date-bar-label">Date</span>
+  <div class="date-chips">
+    {% for d in available_dates[:14] %}
+      <a href="{{ url_for('commio.report', slug=slug, view='day', date=d.report_date) }}"
+         class="date-chip {% if d.report_date == selected_date %}active{% endif %}">
+        {{ d.report_date }}
+      </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="day">
+    <input type="date" name="date" value="{{ selected_date or '' }}" onchange="this.form.submit()">
+    {% if selected_date %}
+      <a href="{{ url_for('commio.report', slug=slug, view='day') }}" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+{% elif view == 'week' and weeks %}
+<div class="date-bar">
+  <span class="date-bar-label">Week</span>
+  <div class="date-chips">
+    {% for w in weeks[:10] %}
+      <a href="{{ url_for('commio.report', slug=slug, view='week', date=w.start) }}"
+         class="date-chip {% if w.start == selected_date %}active{% endif %}">
+        {{ w.label }}
+      </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="week">
+    <input type="date" name="date" value="{{ selected_date or '' }}" onchange="this.form.submit()" title="Pick any date in the week">
+  </form>
+</div>
+
+{% elif view == 'month' and months %}
+<div class="date-bar">
+  <span class="date-bar-label">Month</span>
+  <div class="date-chips">
+    {% for m in months[:12] %}
+      <a href="{{ url_for('commio.report', slug=slug, view='month', month=m.month) }}"
+         class="date-chip {% if m.month == selected_month %}active{% endif %}">
+        {{ m.month }}
+      </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="month">
+    <input type="month" name="month" value="{{ selected_month or '' }}" onchange="this.form.submit()">
+  </form>
+</div>
+{% endif %}
+
+{% if kpi %}
+
+{# ── KPI Cards ── #}
+<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:28px;">
+  <div class="stat">
+    <div class="stat-value">{{ "{:,}".format(kpi.total) }}</div>
+    <div class="stat-label">Total Messages</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" style="color:var(--green)">{{ "{:,}".format(kpi.delivered) }}</div>
+    <div class="stat-label">Delivered (200)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" style="color:var(--red)">{{ "{:,}".format(kpi.failed) }}</div>
+    <div class="stat-label">Failed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" style="color:{% if kpi.delivered_rate >= 95 %}var(--green){% elif kpi.delivered_rate < 80 %}var(--red){% else %}var(--text){% endif %}">
+      {{ kpi.delivered_rate }}%
+    </div>
+    <div class="stat-label">Delivered Rate</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" style="color:{% if kpi.failed_rate <= 5 %}var(--green){% elif kpi.failed_rate > 20 %}var(--red){% else %}var(--text){% endif %}">
+      {{ kpi.failed_rate }}%
+    </div>
+    <div class="stat-label">Failed Rate</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">
+      {% if kpi.avg_per_min is not none %}{{ "%.1f"|format(kpi.avg_per_min) }}{% else %}—{% endif %}
+    </div>
+    <div class="stat-label">Avg SMS / min</div>
+  </div>
+</div>
+
+{# ── Failure Breakdown ── #}
+{% if failures %}
+<h2 style="font-size:15px; font-weight:600; margin-bottom:12px;">Failure Breakdown</h2>
+<div class="table-wrap" style="margin-bottom:32px; max-width:860px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Carrier</th>
+        <th>Status Code</th>
+        <th>Description</th>
+        <th style="text-align:right">Count</th>
+        <th style="text-align:right">% of Failures</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in failures %}
+      <tr>
+        <td>{{ f.carrier }}</td>
+        <td class="mono">
+          <span class="badge badge-failed">{{ f.status_code }}</span>
+        </td>
+        <td>{{ f.error }}</td>
+        <td class="mono" style="text-align:right; color:var(--red);">{{ "{:,}".format(f.cnt) }}</td>
+        <td style="text-align:right; color:var(--text-muted);">
+          {% if kpi.failed > 0 %}{{ "%.1f"|format(f.cnt / kpi.failed * 100) }}%{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="background:var(--success-bg); border:1px solid var(--success-border); border-radius:8px; padding:12px 16px; margin-bottom:32px; color:var(--success-text); font-size:13px; max-width:480px;">
+  No failures recorded for this company during {{ label or "this period" }}.
+</div>
+{% endif %}
+
+{# ── Message Records ── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+  <h2 style="font-size:15px; font-weight:600;">Message Records</h2>
+  <span style="font-size:12px; color:var(--text-muted);">{{ "{:,}".format(total_records) }} total · page {{ page }} of {{ total_pages }}</span>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Created</th>
+        <th>From DID</th>
+        <th>To DID</th>
+        <th>Msgs</th>
+        <th>Status</th>
+        <th>Description</th>
+        <th>Carrier</th>
+        <th>Direction</th>
+        <th>Campaign ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="mono" style="white-space:nowrap;">{{ row['created'] or '—' }}</td>
+        <td class="mono">{{ row['from_did'] or '—' }}</td>
+        <td class="mono">{{ row['to_did'] or '—' }}</td>
+        <td style="text-align:right;">{{ row['msg_count'] or '—' }}</td>
+        <td>
+          {% set sc = row['delivery_status_code'] or '' %}
+          {% if sc == '200' %}
+            <span class="badge badge-delivered">{{ sc }}</span>
+          {% elif sc in ('005', '600', '800', '900') %}
+            <span class="badge badge-failed">{{ sc }}</span>
+          {% elif sc == '700' %}
+            <span class="badge badge-warn">{{ sc }}</span>
+          {% else %}
+            <span class="badge badge-other">{{ sc or '—' }}</span>
+          {% endif %}
+        </td>
+        <td title="{{ row['status_description'] }}">{{ row['status_description'] or '—' }}</td>
+        <td>{{ row['carrier'] or '—' }}</td>
+        <td>{{ row['direction'] or '—' }}</td>
+        <td class="mono">{{ row['campaign_id'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}<a href="?page={{ page - 1 }}&view={{ view }}&date={{ selected_date or '' }}&month={{ selected_month or '' }}">← Prev</a>{% endif %}
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}<span class="current">{{ p }}</span>
+    {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+      <a href="?page={{ p }}&view={{ view }}&date={{ selected_date or '' }}&month={{ selected_month or '' }}">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}<span class="dots">…</span>{% endif %}
+  {% endfor %}
+  {% if page < total_pages %}<a href="?page={{ page + 1 }}&view={{ view }}&date={{ selected_date or '' }}&month={{ selected_month or '' }}">Next →</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <div style="font-size:40px;">📭</div>
+  <p>No data{% if label %} for <strong>{{ label }}</strong>{% endif %}.</p>
+  <p><a href="{{ url_for('commio.upload') }}">Upload a Commio MDR CSV</a> or pick a different period above.</p>
+</div>
+{% endif %}
+
+{% endblock %}

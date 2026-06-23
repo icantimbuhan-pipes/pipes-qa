@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Checklists — Pipes.QA Portal{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:12px;">
+  <div class="page-header" style="margin-bottom:0;">
+    <h1>QA Checklists</h1>
+    <p>Manage custom checklists. Hardcoded ones are read-only.</p>
+  </div>
+  <a href="{{ url_for('checklists.new') }}" class="btn btn-primary">+ New Checklist</a>
+</div>
+
+{# ── Custom checklists ── #}
+{% if custom %}
+<h2 style="font-size:14px; font-weight:600; color:var(--text-muted); letter-spacing:.06em;
+           text-transform:uppercase; margin-bottom:12px;">Custom</h2>
+<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:32px;">
+  {% for cl in custom %}
+  <div class="card" style="display:flex; align-items:center; gap:16px; padding:16px 20px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:180px;">
+      <div style="font-size:15px; font-weight:600;">{{ cl['name'] }}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:2px; font-family:var(--mono);">
+        {{ cl['key'] }} ·
+        {{ providers.get(cl['default_provider'], cl['default_provider']) }} ·
+        <span class="badge badge-{% if cl['report_type'] == 'hourly' %}blue{% else %}pass{% endif %}">
+          {{ cl['report_type'] }}
+        </span>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-shrink:0;">
+      <a href="{{ url_for('daily_qa.pick') }}?preset={{ cl['key'] }}"
+         class="btn btn-ghost" style="font-size:12px; padding:5px 12px;">▶ Run</a>
+      <a href="{{ url_for('checklists.edit', checklist_id=cl['id']) }}"
+         class="btn btn-ghost" style="font-size:12px; padding:5px 12px;">✏ Edit</a>
+      <form method="post" action="{{ url_for('checklists.delete', checklist_id=cl['id']) }}"
+            onsubmit="return confirm('Delete this checklist?')">
+        <button type="submit" class="btn btn-danger" style="font-size:12px; padding:5px 12px;">✕ Delete</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Hardcoded checklists ── #}
+<h2 style="font-size:14px; font-weight:600; color:var(--text-muted); letter-spacing:.06em;
+           text-transform:uppercase; margin-bottom:12px;">Built-in (read-only)</h2>
+<div style="display:flex; flex-direction:column; gap:10px;">
+  {% for cl in hardcoded %}
+  <div class="card" style="display:flex; align-items:center; gap:16px; padding:14px 20px; flex-wrap:wrap;
+                            opacity:.75;">
+    <div style="flex:1; min-width:180px;">
+      <div style="font-size:14px; font-weight:500;">{{ cl['name'] }}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:2px; font-family:var(--mono);">
+        {{ cl['key'] }} ·
+        <span class="badge badge-pending">built-in</span>
+      </div>
+    </div>
+    <a href="{{ url_for('daily_qa.pick') }}"
+       class="btn btn-ghost" style="font-size:12px; padding:5px 12px; flex-shrink:0;">▶ Run</a>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

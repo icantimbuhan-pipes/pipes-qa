@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}{% if is_new %}New Provider{% else %}Edit {{ config.name }}{% endif %} — API Configs{% endblock %}
+{% block page_class %}page-sm{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="{{ url_for('api_configs.index') }}" class="btn btn-ghost"
+     style="padding:6px 14px; font-size:13px;">← API Configs</a>
+  <h1 style="font-size:20px; font-weight:700;">
+    {% if is_new %}New Provider{% else %}{{ config.name }}{% endif %}
+  </h1>
+  {% if not is_new %}
+  <span class="badge badge-pending" style="font-family:var(--mono); font-size:11px;">{{ config.key }}</span>
+  {% if is_custom %}<span class="badge badge-blue" style="font-size:11px;">custom</span>{% endif %}
+  {% endif %}
+</div>
+
+<form method="post"
+      action="{% if is_new %}{{ url_for('api_configs.create') }}{% else %}{{ url_for('api_configs.save', provider_key=config.key) }}{% endif %}">
+
+  <div class="card" style="margin-bottom:20px; padding:20px;">
+    <h2 style="font-size:13px; font-weight:600; color:var(--text-muted); letter-spacing:.06em;
+               text-transform:uppercase; margin-bottom:16px;">API Connection</h2>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          Display Name *
+        </label>
+        <input type="text" name="name" value="{{ config.name }}" required
+               {% if is_new %}oninput="autoKey(this.value)"{% endif %}
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:8px 11px; font-size:14px;">
+      </div>
+
+      {% if is_new %}
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          Provider Key
+          <span style="font-weight:400; color:rgba(107,114,128,.6);">— auto-filled from name, must be unique</span>
+        </label>
+        <input type="text" name="key" id="key-input" value="{{ config.key }}"
+               placeholder="e.g. my_new_provider"
+               pattern="[a-z0-9_]+"
+               title="Lowercase letters, numbers, underscores only"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:8px 11px;
+                      font-size:13px; font-family:var(--mono);">
+        <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">
+          Lowercase, underscores only. Cannot be changed after creation.
+        </div>
+      </div>
+      {% endif %}
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          API URL
+          <span style="font-weight:400; color:rgba(107,114,128,.6);">— endpoint that receives the lead</span>
+        </label>
+        <input type="text" name="api_url" value="{{ config.api_url }}"
+               placeholder="https://leads.pipes.ai/api/lead"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:8px 11px;
+                      font-size:13px; font-family:var(--mono);">
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          API Key
+          {% if env_key %}
+          <span style="font-weight:400; color:rgba(107,114,128,.6);">(env: {{ env_key }})</span>
+          {% endif %}
+        </label>
+        <div style="position:relative;">
+          <input id="api-key-input" type="password" name="api_key" value="{{ config.api_key }}"
+                 placeholder="Paste your API key…"
+                 autocomplete="off"
+                 style="width:100%; background:var(--bg); border:1px solid var(--border);
+                        color:var(--text); border-radius:6px; padding:8px 42px 8px 11px;
+                        font-size:13px; font-family:var(--mono);">
+          <button type="button" onclick="toggleKey()"
+                  style="position:absolute; right:10px; top:50%; transform:translateY(-50%);
+                         background:transparent; border:none; color:var(--text-muted);
+                         cursor:pointer; font-size:14px; padding:2px 4px;" title="Show/hide">
+            👁
+          </button>
+        </div>
+        {% if config.api_key %}
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+          Current: ••••{{ config.api_key[-6:] }}
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px; padding:20px;">
+    <h2 style="font-size:13px; font-weight:600; color:var(--text-muted); letter-spacing:.06em;
+               text-transform:uppercase; margin-bottom:16px;">Test Lead Params</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">
+      Sent with every triggered call for this provider. Phone/IP/email come from Shared QA Settings.
+    </p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          First Name
+        </label>
+        <input type="text" name="first_name" value="{{ config.first_name }}"
+               placeholder="e.g. John"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:7px 10px; font-size:13px;">
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          Last Name
+        </label>
+        <input type="text" name="last_name" value="{{ config.last_name }}"
+               placeholder="e.g. Khomp"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:7px 10px; font-size:13px;">
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          State
+        </label>
+        <input type="text" name="state" value="{{ config.state }}"
+               placeholder="FL" maxlength="2"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:7px 10px; font-size:13px;
+                      font-family:var(--mono); text-transform:uppercase;">
+      </div>
+
+      <div>
+        <label style="font-size:11px; font-weight:600; color:var(--text-muted);
+                      letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; display:block;">
+          Postal Code
+        </label>
+        <input type="text" name="postal_code" value="{{ config.postal_code }}"
+               placeholder="32004" maxlength="10"
+               style="width:100%; background:var(--bg); border:1px solid var(--border);
+                      color:var(--text); border-radius:6px; padding:7px 10px; font-size:13px;
+                      font-family:var(--mono);">
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px; padding:20px;">
+    <h2 style="font-size:13px; font-weight:600; color:var(--text-muted); letter-spacing:.06em;
+               text-transform:uppercase; margin-bottom:8px;">Extra Params (JSON)</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+      Any additional fields to merge into the API request. Must be a valid JSON object.
+    </p>
+    <textarea name="extra_json" rows="4" id="extra-json"
+              placeholder='{"tcpa_url": "https://example.com", "campaign_id": "abc123"}'
+              style="font-family:var(--mono); font-size:12px; resize:vertical;">{{ config.extra_json }}</textarea>
+    <div id="json-err" style="font-size:11px; color:var(--red); margin-top:4px; display:none;">
+      Invalid JSON — fix before saving.
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px; align-items:center;">
+    <button type="button" onclick="submitForm()" class="btn btn-primary">
+      💾 {% if is_new %}Create Provider{% else %}Save Config{% endif %}
+    </button>
+    <a href="{{ url_for('api_configs.index') }}" class="btn btn-ghost">Cancel</a>
+    {% if not is_new %}
+    <button type="button" class="btn btn-ghost"
+            style="margin-left:auto;"
+            onclick="testNow(this)">▶ Test Now</button>
+    {% endif %}
+  </div>
+
+</form>
+
+<div id="test-result" style="margin-top:16px; display:none; background:var(--bg);
+     border:1px solid var(--border); border-radius:8px; padding:14px;">
+  <div style="font-size:13px; font-weight:500; margin-bottom:8px;" id="test-msg"></div>
+  <pre id="test-resp" style="font-size:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-all;
+       max-height:160px;"></pre>
+</div>
+
+<script>
+function autoKey(name) {
+  const k = document.getElementById('key-input');
+  if (!k) return;
+  k.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function toggleKey() {
+  const f = document.getElementById('api-key-input');
+  f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+function submitForm() {
+  const ta  = document.getElementById('extra-json');
+  const err = document.getElementById('json-err');
+  try { JSON.parse(ta.value || '{}'); err.style.display='none'; }
+  catch(e) { err.style.display='block'; return; }
+  ta.closest('form').submit();
+}
+
+async function testNow(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  const box  = document.getElementById('test-result');
+  const msg  = document.getElementById('test-msg');
+  const resp = document.getElementById('test-resp');
+  box.style.display = 'block';
+  msg.style.color   = 'var(--text-muted)';
+  msg.textContent   = 'Sending call…';
+  resp.textContent  = '';
+
+  try {
+    const r    = await fetch(`/api-configs/{{ config.key }}/test`, {method:'POST'});
+    const data = await r.json();
+    if (data.ok && data.http_code === 200) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = `✓ ${data.http_code} — Accepted`;
+    } else if (data.ok) {
+      msg.style.color = 'var(--yellow)';
+      msg.textContent = `⚠ ${data.http_code || 'Error'}`;
+    } else {
+      msg.style.color = 'var(--red)';
+      msg.textContent = `✕ ${data.error || 'Failed'}`;
+    }
+    resp.textContent = data.response || data.error || '';
+  } catch(e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = `✕ ${e.message}`;
+  }
+  btn.disabled    = false;
+  btn.textContent = orig;
+}
+</script>
+
+{% endblock %}
