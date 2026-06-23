@@ -1,4 +1,4 @@
-# /qa:add-provider
+# /daily-qa:add-provider
 
 Step-by-step guide to wiring up a new call provider (Heavy FS, Lite Khomp, Lite FS).
 

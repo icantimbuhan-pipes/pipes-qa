@@ -15,14 +15,23 @@ uv run python -m runner --provider heavy-khomp  # one provider
 
 | Skill | What it does |
 |-------|-------------|
-| `/qa:run` | Master daily QA orchestrator — run this |
-| `/qa:add-provider` | Wire up Heavy FS, Lite Khomp, or Lite FS |
+| `/daily-qa:run` | Master daily QA orchestrator — run this |
+| `/daily-qa:checklist` | View, edit, or add sections to the QA checklist |
+| `/daily-qa:add-provider` | Wire up Heavy FS, Lite Khomp, or Lite FS |
+| `/daily-qa:report` | View or resend the last Slack report |
+| `/validator:run` | API Validator — run rejection scenario tests |
+| `/validator:add-scenario` | Add a new rejection code test scenario |
+| `/dnc:portal` | Manual DNC portal — paste numbers, fire postback, view log |
+| `/dnc:report` | Query and export the DNC log from the database |
+| `/sms:run` | SMS deliverability workflow — upload, reports, Slack |
+| `/sms:telgorithm` | Telgorithm CSV format, error codes, Slack setup |
+| `/sms:signalmash` | Signalmash DLR aggregate format + error code reference |
+| `/sms:commio` | Commio status codes, campaign checker, Slack setup |
 | `/providers:heavy-khomp` | API reference + AMD behavior + troubleshooting |
 | `/providers:heavy-fs` | Heavy FS reference (not yet configured) |
 | `/providers:lite-khomp` | Lite Khomp reference (not yet configured) |
 | `/providers:lite-fs` | Lite FS reference (not yet configured) |
 | `/ops:status` | Check system health before running |
-| `/ops:report` | View or resend the last Slack report |
 
 ## Project layout
 
