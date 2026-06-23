@@ -13,5 +13,7 @@ data/*.db-wal
 # Runtime state
 .portal.pid
 .tunnel.pid
+.dnc_bot.pid
 portal.log
 tunnel.log
+dnc_bot.log
