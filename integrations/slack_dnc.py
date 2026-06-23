@@ -26,6 +26,14 @@ log = logging.getLogger("slack_dnc")
 DNC_URL     = "https://integrations.pipes.ai/api/lead/do-not-call/7l6OaLWvqXoBz9pDVeExbn3JwG2rP8jN"
 DNC_CHANNEL = os.environ.get("DNC_SLACK_CHANNEL", "")
 
+try:
+    from portal.db import log_dnc as _db_log_dnc
+    def _log_portal(phone: str, status: str, channel: str) -> None:
+        _db_log_dnc(phone, status, source="slack", slack_channel=channel)
+except Exception:
+    def _log_portal(phone: str, status: str, channel: str) -> None:
+        pass
+
 
 # ── Phone extraction ───────────────────────────────────────────────────────────
 
@@ -182,6 +190,9 @@ def main():
         log.info(f"Found {len(phones)} number(s): {phones}")
         results = {phone: dnc_number(phone) for phone in phones}
         all_ok  = all(results.values())
+
+        for phone, ok in results.items():
+            _log_portal(phone, "success" if ok else "failed", channel_id)
 
         try:
             client.reactions_add(
