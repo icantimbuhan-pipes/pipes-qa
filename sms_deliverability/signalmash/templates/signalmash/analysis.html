@@ -1,0 +1,268 @@
+{% extends "signalmash/base.html" %}
+{% block title %}Analysis — Signalmash{% endblock %}
+
+{% block content %}
+<style>
+  .ana-kpi-strip {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .ana-kpi { background: var(--surface); padding: 18px 16px; text-align: center; }
+  .ana-kpi-val { display: block; font-family: var(--mono); font-size: 28px; font-weight: 700; line-height: 1; }
+  .ana-kpi-lbl { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-top: 6px; }
+  .val-green { color: var(--green); }
+  .val-yellow { color: var(--yellow); }
+  .val-red { color: var(--red); }
+  .val-blue { color: #1565c0; }
+
+  .ana-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px; overflow: hidden; }
+  .ana-sec-head {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ana-sec-head span { font-weight: 400; font-size: 11px; color: var(--text); letter-spacing: 0; text-transform: none; font-family: var(--mono); }
+  .ana-sec-body { padding: 14px 16px; }
+
+  .co-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .co-table th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); text-align: left; padding: 0 12px 8px 0; border-bottom: 1px solid var(--border); }
+  .co-table td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--border-light); vertical-align: top; }
+  .co-table tr:last-child td { border-bottom: none; }
+
+  .fd-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: var(--bg); border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+  .fd-code { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
+  .fd-body { flex: 1; }
+  .fd-label { font-weight: 600; margin-bottom: 2px; }
+  .fd-cause { color: var(--text-secondary); line-height: 1.4; margin-bottom: 4px; }
+  .fd-action { color: var(--green); font-weight: 500; font-size: 11.5px; }
+
+  .code-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .code-table th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); text-align: left; padding: 0 10px 8px 0; border-bottom: 1px solid var(--border); }
+  .code-table td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--border-light); vertical-align: top; }
+  .code-table tr:last-child td { border-bottom: none; }
+  .code-tag { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+  .ct-fail { background: var(--red-bg); color: var(--red); }
+  .ct-part { background: var(--yellow-bg); color: var(--yellow); }
+  .ct-def  { background: var(--border-light); color: var(--text); }
+
+  .action-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }
+  .action-card:last-child { margin-bottom: 0; }
+  .action-card.sev-critical { border-left: 3px solid var(--red); }
+  .action-card.sev-high     { border-left: 3px solid var(--yellow); }
+  .action-card.sev-medium   { border-left: 3px solid #1565c0; }
+  .action-card.sev-low      { border-left: 3px solid var(--border); }
+  .ac-code { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+  .ac-label { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .ac-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; }
+  .ac-count { font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  .period-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+  .ptab { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; text-decoration: none; border: 1px solid var(--border); color: var(--text-secondary); transition: background .15s; }
+  .ptab:hover { background: var(--bg); }
+  .ptab.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  .empty-state { padding: 48px 24px; text-align: center; color: var(--text-muted); }
+  .empty-state p { margin-top: 10px; font-size: 14px; }
+
+  .pct-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .pct-bar-track { flex: 1; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
+  .pct-bar-fill { height: 100%; border-radius: 3px; }
+</style>
+
+{# ── Header ── #}
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <a href="{{ url_for('signalmash.reports') }}" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">← Reports</a>
+    <div class="page-header" style="margin-bottom:0;">
+      <h1>Signalmash — Deliverability Analysis</h1>
+      <p>Root cause analysis, failure intelligence, and ranked action plan.</p>
+    </div>
+  </div>
+</div>
+
+{# ── Period selector ── #}
+<div class="period-tabs">
+  <a href="{{ url_for('signalmash.analysis', period='month') }}"   class="ptab {% if period=='month'   %}active{% endif %}">This month</a>
+  <a href="{{ url_for('signalmash.analysis', period='3months') }}" class="ptab {% if period=='3months' %}active{% endif %}">Last 3 months</a>
+  <a href="{{ url_for('signalmash.analysis', period='all') }}"     class="ptab {% if period=='all'     %}active{% endif %}">All time</a>
+  {% if period_label %}
+    <span style="margin-left:6px; font-size:12px; color:var(--text-muted); align-self:center;">{{ period_label }}</span>
+  {% endif %}
+</div>
+
+{% if not overall %}
+<div class="empty-state">
+  <div style="font-size:40px;">📊</div>
+  <p>No data available. <a href="{{ url_for('signalmash.upload') }}">Upload a Signalmash report</a> to get started.</p>
+</div>
+{% else %}
+
+{# ── Overall KPI ── #}
+<div class="ana-kpi-strip">
+  <div class="ana-kpi">
+    <span class="ana-kpi-val {% if overall.rate >= 95 %}val-green{% elif overall.rate >= 94 %}val-yellow{% else %}val-red{% endif %}">{{ overall.rate }}%</span>
+    <span class="ana-kpi-lbl">Delivery Rate
+      &nbsp;<span class="badge {{ overall.status_badge[1] }}" style="font-size:10px;">{{ overall.status_badge[0] }}</span>
+    </span>
+  </div>
+  <div class="ana-kpi">
+    <span class="ana-kpi-val val-blue">{{ "{:,}".format(overall.total) }}</span>
+    <span class="ana-kpi-lbl">Total Messages</span>
+  </div>
+  <div class="ana-kpi">
+    <span class="ana-kpi-val {% if overall.failed == 0 %}val-green{% else %}val-red{% endif %}">{{ "{:,}".format(overall.failed) }}</span>
+    <span class="ana-kpi-lbl">Failed</span>
+  </div>
+</div>
+
+{# ── Company health table ── #}
+<div class="ana-section">
+  <div class="ana-sec-head">Client health overview <span>{{ companies|length }} client{% if companies|length != 1 %}s{% endif %}</span></div>
+  <div class="ana-sec-body" style="padding:0;">
+    <table class="co-table" style="margin:0;">
+      <thead>
+        <tr>
+          <th style="padding-left:16px;">Client</th>
+          <th>Total</th>
+          <th>Delivered</th>
+          <th>Rate</th>
+          <th>Status</th>
+          <th>Top Failure</th>
+          <th style="padding-right:16px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in companies %}
+        <tr>
+          <td style="font-weight:600; padding-left:16px;">
+            <a href="{{ url_for('signalmash.company_analysis', slug=c.slug) }}" style="color:inherit;">{{ c.name }}</a>
+          </td>
+          <td style="font-family:var(--mono);">{{ "{:,}".format(c.total) }}</td>
+          <td style="font-family:var(--mono); color:var(--green);">{{ "{:,}".format(c.delivered) }}</td>
+          <td>
+            <span style="font-family:var(--mono); font-weight:700;
+              color:{% if c.rate >= 95 %}var(--green){% elif c.rate >= 94 %}var(--yellow){% else %}var(--red){% endif %};">
+              {{ c.rate }}%
+            </span>
+          </td>
+          <td><span class="badge {{ c.status_badge[1] }}">{{ c.status_badge[0] }}</span></td>
+          <td style="font-size:12px; color:var(--text-secondary); max-width:220px;">
+            {% if c.top_failure %}
+              <span class="code-tag {% if c.top_failure.severity == 'critical' %}ct-fail{% elif c.top_failure.severity == 'high' %}ct-part{% else %}ct-def{% endif %}">
+                {{ c.top_failure.code }}
+              </span>
+              {{ c.top_failure.label[:40] }}{% if c.top_failure.label|length > 40 %}…{% endif %}
+              <span style="color:var(--text-muted);">({{ "{:,}".format(c.top_failure.count) }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="padding-right:16px;">
+            <div style="display:flex; gap:5px; align-items:center;">
+              <button class="btn btn-ghost" style="padding:3px 10px; font-size:11px;"
+                onclick="toggleDetail('detail-{{ loop.index }}', this)">Details ▾</button>
+              <form method="post" action="{{ url_for('signalmash.company_analysis_slack', slug=c.slug) }}" style="margin:0;">
+                <input type="hidden" name="period" value="{{ period }}">
+                <button type="submit" class="btn btn-primary" style="padding:3px 10px; font-size:11px; white-space:nowrap;">↗ Slack</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        <tr id="detail-{{ loop.index }}" style="display:none;">
+          <td colspan="7" style="background:var(--bg); padding:12px 16px 16px;">
+            {% if c.failures %}
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:8px;">Failure breakdown — {{ c.name }}</div>
+            {% for f in c.failures %}
+            <div class="fd-row">
+              <span class="fd-code {% if f.severity == 'critical' %}ct-fail{% elif f.severity == 'high' %}ct-part{% else %}ct-def{% endif %}">
+                {{ f.code }}
+              </span>
+              <div class="fd-body">
+                <div class="fd-label">{{ f.label }} — <span style="font-family:var(--mono);">{{ "{:,}".format(f.count) }}</span> <span style="color:var(--text-muted);">({{ f.pct }}%)</span></div>
+                {% if f.root_cause %}<div class="fd-cause">{{ f.root_cause }}</div>{% endif %}
+                {% if f.action %}<div class="fd-action">↳ {{ f.action }}</div>{% endif %}
+              </div>
+              <span class="badge {{ f.badge[1] }}" style="flex-shrink:0; font-size:10px;">{{ f.badge[0] }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <span style="color:var(--text-muted); font-size:12px;">No failure detail available.</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Error code intelligence ── #}
+{% if top_codes %}
+<div class="ana-section">
+  <div class="ana-sec-head">Error code intelligence <span>top DLR codes across all clients</span></div>
+  <div class="ana-sec-body" style="padding:0 16px 4px;">
+    <table class="code-table">
+      <thead><tr>
+        <th>DLR Code</th><th>Description</th><th>Count</th><th>% of Failures</th><th>Category</th><th>Severity</th>
+      </tr></thead>
+      <tbody>
+        {% for tc in top_codes %}
+        <tr>
+          <td><span class="code-tag {% if tc.severity == 'critical' %}ct-fail{% elif tc.severity == 'high' %}ct-part{% else %}ct-def{% endif %}">{{ tc.code }}</span></td>
+          <td style="font-weight:500;">{{ tc.label }}</td>
+          <td style="font-family:var(--mono); font-weight:700;">{{ "{:,}".format(tc.count) }}</td>
+          <td>
+            <div class="pct-bar-wrap">
+              <div class="pct-bar-track">
+                <div class="pct-bar-fill"
+                  style="width:{{ tc.pct }}%;
+                  background:{% if tc.severity == 'critical' %}var(--red){% elif tc.severity == 'high' %}var(--yellow){% else %}#1565c0{% endif %};"></div>
+              </div>
+              <span style="font-family:var(--mono); font-size:11px; font-weight:700; width:38px; text-align:right;">{{ tc.pct }}%</span>
+            </div>
+          </td>
+          <td style="font-size:12px; color:var(--text-secondary);">{{ tc.category }}</td>
+          <td><span class="badge {{ tc.badge[1] }}" style="font-size:10px;">{{ tc.badge[0] }}</span></td>
+        </tr>
+        <tr>
+          <td colspan="6" style="padding:0 0 10px 0; color:var(--text-secondary); font-size:12px;">
+            {% if tc.root_cause %}<span style="color:var(--text-muted); font-weight:600;">Root cause:</span> {{ tc.root_cause }}{% endif %}
+            {% if tc.action %}<br><span style="color:var(--green); font-weight:600;">Action:</span> {{ tc.action }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Action plan ── #}
+{% if action_items %}
+<div class="ana-section">
+  <div class="ana-sec-head">Action plan <span>ranked by severity</span></div>
+  <div class="ana-sec-body">
+    {% for item in action_items %}
+    <div class="action-card sev-{{ item.severity }}">
+      <div class="ac-code">DLR {{ item.code }} · <span class="badge {{ item.badge[1] }}" style="font-size:10px;">{{ item.badge[0] }}</span></div>
+      <div class="ac-label">{{ item.label }}</div>
+      <div class="ac-body">{{ item.action }}</div>
+      <div class="ac-count">{{ "{:,}".format(item.count) }} messages affected</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endif %}{# /if overall #}
+
+<script>
+function toggleDetail(id, btn) {
+  var row = document.getElementById(id);
+  if (!row) return;
+  var open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'table-row';
+  btn.textContent = open ? 'Details ▾' : 'Hide ▴';
+}
+</script>
+{% endblock %}

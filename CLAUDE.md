@@ -24,6 +24,7 @@ uv run python -m runner --provider heavy-khomp  # one provider
 | `/dnc:portal` | Manual DNC portal — paste numbers, fire postback, view log |
 | `/dnc:report` | Query and export the DNC log from the database |
 | `/sms:run` | SMS deliverability workflow — upload, reports, Slack |
+| `/sms:analysis` | KPI analysis — error codes, root causes, action plans, 94% alert reference |
 | `/sms:telgorithm` | Telgorithm CSV format, error codes, Slack setup |
 | `/sms:signalmash` | Signalmash DLR aggregate format + error code reference |
 | `/sms:commio` | Commio status codes, campaign checker, Slack setup |

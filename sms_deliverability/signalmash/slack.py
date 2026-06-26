@@ -1,15 +1,14 @@
-"""Build and send Slack Block Kit payloads for daily SMS deliverability reports."""
+"""Build and send Slack Block Kit payloads for Signalmash SMS deliverability reports."""
 import os
 from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
 
-from sms_deliverability.analysis_kb import get_telgorithm
+from sms_deliverability.analysis_kb import get_signalmash
 
 load_dotenv()
 
-# Use a dedicated webhook if set, otherwise fall back to the project-wide one.
 _WEBHOOK_ENV_KEYS = ("SMS_SLACK_WEBHOOK_URL", "SLACK_WEBHOOK_URL")
 
 
@@ -26,11 +25,6 @@ def _fmt_num(n: int) -> str:
 
 
 def build_payload(date: str, companies: list[dict], failures_by_company: dict[str, list]) -> dict:
-    """
-    companies: list of dicts with keys name, total, delivered, failed,
-               delivered_rate, failed_rate, avg_per_min, campaign_ids
-    failures_by_company: company_name -> list of {carrier, error, cnt}
-    """
     ALERT_THRESHOLD = 94
 
     blocks: list[dict] = [
@@ -67,13 +61,10 @@ def build_payload(date: str, companies: list[dict], failures_by_company: dict[st
             f"• {failed_icon} Failed: {_fmt_num(c['failed'])} ({c['failed_rate']}%)",
         ]
 
-        if c.get("avg_per_min") is not None:
-            lines.append(f"• Avg SMS/min: {c['avg_per_min']:.1f}")
-
         if top:
             error_short = (top["error"] or "Unknown")[:60]
-            lines.append(f"• Top failure: *{top['carrier']}* — {error_short} ({_fmt_num(top['cnt'])})")
-            kb = get_telgorithm(top["error"])
+            lines.append(f"• Top DLR: *{top.get('dlr_code','?')}* {error_short} ({_fmt_num(top['cnt'])})")
+            kb = get_signalmash(top.get("dlr_code", ""))
             if kb.get("root_cause"):
                 cause_short = kb["root_cause"].split(".")[0][:100]
                 lines.append(f"  _Root cause: {cause_short}_")
@@ -84,11 +75,10 @@ def build_payload(date: str, companies: list[dict], failures_by_company: dict[st
         })
         blocks.append({"type": "divider"})
 
-    # Footer
     total_all = sum(c["total"] for c in companies)
     blocks.append({
         "type": "context",
-        "elements": [{"type": "mrkdwn", "text": f"Pipes QA · Telgorithm · {_fmt_num(total_all)} total messages · {date}"}],
+        "elements": [{"type": "mrkdwn", "text": f"Pipes QA · Signalmash · {_fmt_num(total_all)} total messages · {date}"}],
     })
 
     return {"blocks": blocks}
@@ -126,12 +116,12 @@ def build_company_payload(
     if failures:
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "*Failure Analysis*"},
+            "text": {"type": "mrkdwn", "text": "*DLR Failure Analysis*"},
         })
         for f in failures[:8]:
             sev_icon = "🔴" if f["severity"] == "critical" else ("⚠️" if f["severity"] == "high" else "🔵")
             lines = [
-                f"{sev_icon} *{f['code']}* — {f['label']} ({_fmt_num(f['count'])}, {f['pct']}%)",
+                f"{sev_icon} *DLR {f['code']}* — {f['label']} ({_fmt_num(f['count'])}, {f['pct']}%)",
             ]
             if f.get("root_cause"):
                 lines.append(f"  _Root cause:_ {f['root_cause'].split('.')[0][:120]}")
@@ -149,14 +139,13 @@ def build_company_payload(
 
     blocks.append({
         "type": "context",
-        "elements": [{"type": "mrkdwn", "text": f"Pipes QA · Telgorithm · {company_name} · {period_label}"}],
+        "elements": [{"type": "mrkdwn", "text": f"Pipes QA · Signalmash · {company_name} · {period_label}"}],
     })
 
     return {"blocks": blocks}
 
 
 def send(payload: dict) -> tuple[bool, str]:
-    """POST payload to Slack. Returns (success, message)."""
     url = _webhook_url()
     if not url:
         return False, "No Slack webhook configured. Set SMS_SLACK_WEBHOOK_URL or SLACK_WEBHOOK_URL in .env"

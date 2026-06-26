@@ -466,3 +466,259 @@ def send_slack():
 
     flash(message, "success" if success else "error")
     return redirect(url_for("telgorithm.reports", date=report_date))
+
+
+# ── Analysis ──────────────────────────────────────────────────────────────────
+
+@bp.route("/analysis")
+def analysis():
+    from sms_deliverability.analysis_kb import (
+        get_telgorithm, delivery_status, SEVERITY_BADGE, STATUS_BADGE, SEVERITY_ORDER
+    )
+
+    period = request.args.get("period", "month")  # month | 3months | all
+
+    with get_conn() as conn:
+        available_dates = get_available_dates(conn)
+
+    if not available_dates:
+        return render_template("telgorithm/analysis.html",
+            period=period, overall=None, companies=[], top_codes=[], action_items=[])
+
+    # Build date filter
+    all_dates = [r["report_date"] for r in available_dates]
+    latest    = max(all_dates)
+
+    if period == "month":
+        month_str  = latest[:7]
+        date_filter = {"date_from": f"{month_str}-01", "date_to": latest}
+        period_label = datetime.strptime(month_str, "%Y-%m").strftime("%B %Y")
+    elif period == "3months":
+        cutoff = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=90)).strftime("%Y-%m-%d")
+        date_filter = {"date_from": cutoff, "date_to": latest}
+        period_label = f"Last 3 months (to {latest})"
+    else:
+        date_filter  = {}
+        period_label = "All time"
+
+    with get_conn() as conn:
+        companies_raw = get_companies(conn, **date_filter)
+
+    # Per-company KPI + failure breakdown
+    companies = []
+    all_failure_counts: dict[str, int] = {}
+
+    with get_conn() as conn:
+        for c in companies_raw:
+            total, delivered, failed = c["total"], c["delivered"], c["failed"]
+            rate = rate_pct(delivered, total)
+            name = c["company_name"]
+
+            failures_raw = get_failure_breakdown(conn, name, **date_filter)
+            agg_failures: dict[str, dict] = {}
+            for f in failures_raw:
+                code = f["error"] if f["error"] else "UnknownError"
+                kb   = get_telgorithm(code)
+                cnt  = f["cnt"]
+                if code in agg_failures:
+                    agg_failures[code]["count"] += cnt
+                else:
+                    agg_failures[code] = {
+                        "code":       code,
+                        "label":      kb["label"],
+                        "count":      cnt,
+                        "severity":   kb["severity"],
+                        "category":   kb["category"],
+                        "root_cause": kb["root_cause"],
+                        "action":     kb["action"],
+                        "badge":      SEVERITY_BADGE.get(kb["severity"], ("", "")),
+                    }
+                all_failure_counts[code] = all_failure_counts.get(code, 0) + cnt
+            failures = sorted(agg_failures.values(), key=lambda x: -x["count"])
+            for f in failures:
+                f["pct"] = round(f["count"] * 100.0 / failed, 1) if failed else 0
+
+            status = delivery_status(rate)
+            companies.append({
+                "name":     name,
+                "slug":     slugify(name),
+                "total":    total,
+                "delivered": delivered,
+                "failed":   failed,
+                "rate":     rate,
+                "status":   status,
+                "status_badge": STATUS_BADGE[status],
+                "failures": failures[:5],
+                "top_failure": failures[0] if failures else None,
+            })
+
+    # Sort: critical first, then by total desc
+    companies.sort(key=lambda c: (
+        {"critical": 0, "warning": 1, "healthy": 2}[c["status"]],
+        -c["total"]
+    ))
+
+    # Overall KPI
+    total_all     = sum(c["total"] for c in companies)
+    delivered_all = sum(c["delivered"] for c in companies)
+    failed_all    = sum(c["failed"] for c in companies)
+    overall_rate  = rate_pct(delivered_all, total_all)
+    overall_status = delivery_status(overall_rate)
+
+    # Top failure codes across all companies
+    top_codes = sorted(
+        [{"code": k, "count": v,
+          "pct": round(v * 100.0 / failed_all, 1) if failed_all else 0,
+          **get_telgorithm(k)}
+         for k, v in all_failure_counts.items()],
+        key=lambda x: -x["count"]
+    )[:8]
+    for tc in top_codes:
+        tc["badge"] = SEVERITY_BADGE.get(tc["severity"], ("", ""))
+
+    # Action items: deduplicated actions ranked by total affected messages
+    seen_actions: set[str] = set()
+    action_items = []
+    for tc in sorted(top_codes, key=lambda x: SEVERITY_ORDER.get(x["severity"], 99)):
+        if tc["action"] and tc["action"] not in seen_actions:
+            seen_actions.add(tc["action"])
+            action_items.append({
+                "code":     tc["code"],
+                "label":    tc["label"],
+                "severity": tc["severity"],
+                "badge":    tc["badge"],
+                "count":    tc["count"],
+                "action":   tc["action"],
+            })
+        if len(action_items) >= 6:
+            break
+
+    return render_template("telgorithm/analysis.html",
+        period=period,
+        period_label=period_label,
+        overall={
+            "total": total_all, "delivered": delivered_all, "failed": failed_all,
+            "rate": overall_rate, "status": overall_status,
+            "status_badge": STATUS_BADGE[overall_status],
+        },
+        companies=companies,
+        top_codes=top_codes,
+        action_items=action_items,
+    )
+
+
+# ── Per-company analysis ──────────────────────────────────────────────────────
+
+def _build_company_analysis_data(company_name: str, period: str):
+    """Return (kpi, failures, action_items, period_label) for one company."""
+    from sms_deliverability.analysis_kb import (
+        get_telgorithm, delivery_status, SEVERITY_BADGE, STATUS_BADGE, SEVERITY_ORDER
+    )
+
+    with get_conn() as conn:
+        available_dates = get_available_dates(conn)
+
+    all_dates = [r["report_date"] for r in available_dates] if available_dates else []
+    if not all_dates:
+        return None, [], [], ""
+
+    latest = max(all_dates)
+
+    if period == "month":
+        month_str   = latest[:7]
+        date_filter = {"date_from": f"{month_str}-01", "date_to": latest}
+        period_label = datetime.strptime(month_str, "%Y-%m").strftime("%B %Y")
+    elif period == "3months":
+        cutoff = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=90)).strftime("%Y-%m-%d")
+        date_filter  = {"date_from": cutoff, "date_to": latest}
+        period_label = f"Last 3 months (to {latest})"
+    else:
+        date_filter  = {}
+        period_label = "All time"
+
+    with get_conn() as conn:
+        stats        = get_company_stats(conn, company_name, **date_filter)
+        failures_raw = get_failure_breakdown(conn, company_name, **date_filter)
+
+    if stats is None or stats["total"] == 0:
+        return None, [], [], period_label
+
+    total, delivered, failed = stats["total"], stats["delivered"], stats["failed"]
+    rate   = rate_pct(delivered, total)
+    status = delivery_status(rate)
+
+    kpi = {
+        "total": total, "delivered": delivered, "failed": failed,
+        "rate": rate, "status": status,
+        "status_badge": STATUS_BADGE[status],
+    }
+
+    agg_failures: dict[str, dict] = {}
+    for f in failures_raw:
+        code = f["error"] if f["error"] else "UnknownError"
+        kb   = get_telgorithm(code)
+        cnt  = f["cnt"]
+        if code in agg_failures:
+            agg_failures[code]["count"] += cnt
+        else:
+            agg_failures[code] = {
+                "code":       code,
+                "label":      kb["label"],
+                "count":      cnt,
+                "severity":   kb["severity"],
+                "category":   kb["category"],
+                "root_cause": kb["root_cause"],
+                "action":     kb["action"],
+                "badge":      SEVERITY_BADGE.get(kb["severity"], ("", "")),
+            }
+    failures = sorted(agg_failures.values(), key=lambda x: -x["count"])
+    for f in failures:
+        f["pct"] = round(f["count"] * 100.0 / failed, 1) if failed else 0
+
+    seen_actions: set[str] = set()
+    action_items = []
+    for f in sorted(failures, key=lambda x: SEVERITY_ORDER.get(x["severity"], 99)):
+        if f["action"] and f["action"] not in seen_actions:
+            seen_actions.add(f["action"])
+            action_items.append({
+                "code": f["code"], "label": f["label"],
+                "severity": f["severity"], "badge": f["badge"],
+                "count": f["count"], "action": f["action"],
+            })
+
+    return kpi, failures, action_items, period_label
+
+
+@bp.route("/analysis/<slug>")
+def company_analysis(slug: str):
+    company_name = SLUG_TO_COMPANY.get(slug)
+    if not company_name:
+        abort(404)
+
+    period = request.args.get("period", "month")
+    kpi, failures, action_items, period_label = _build_company_analysis_data(company_name, period)
+
+    return render_template("telgorithm/company_analysis.html",
+        company_name=company_name, slug=slug,
+        period=period, period_label=period_label,
+        kpi=kpi, failures=failures, action_items=action_items,
+    )
+
+
+@bp.route("/analysis/<slug>/send-slack", methods=["POST"])
+def company_analysis_slack(slug: str):
+    company_name = SLUG_TO_COMPANY.get(slug)
+    if not company_name:
+        abort(404)
+
+    period = request.form.get("period", "month")
+    kpi, failures, _, period_label = _build_company_analysis_data(company_name, period)
+
+    if kpi is None:
+        flash("No data for this period.", "error")
+        return redirect(url_for("telgorithm.company_analysis", slug=slug, period=period))
+
+    payload = slack_mod.build_company_payload(company_name, period_label, kpi, failures)
+    success, message = slack_mod.send(payload)
+    flash(message, "success" if success else "error")
+    return redirect(url_for("telgorithm.company_analysis", slug=slug, period=period))
