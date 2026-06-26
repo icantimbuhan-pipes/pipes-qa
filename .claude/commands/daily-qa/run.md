@@ -1,4 +1,4 @@
-# /qa:run
+# /daily-qa:run
 
 Master orchestrator for the Pipes Daily Monitoring QA. Run this every day (or every hour) to verify all outbound call flows are working.
 
@@ -19,9 +19,9 @@ Triggers outbound calls via the Pipes API, walks you through a 22-item checklist
 | Key | Name | Status |
 |-----|------|--------|
 | `heavy-khomp` | Outbound Heavy Khomp | ✅ Active |
-| `heavy-fs` | Outbound Heavy FS | 🔧 Run `/qa:add-provider` |
-| `lite-khomp` | Outbound Lite Khomp | 🔧 Run `/qa:add-provider` |
-| `lite-fs` | Outbound Lite FS | 🔧 Run `/qa:add-provider` |
+| `heavy-fs` | Outbound Heavy FS | 🔧 Run `/daily-qa:add-provider` |
+| `lite-khomp` | Outbound Lite Khomp | 🔧 Run `/daily-qa:add-provider` |
+| `lite-fs` | Outbound Lite FS | 🔧 Run `/daily-qa:add-provider` |
 
 ---
 
@@ -99,7 +99,7 @@ uv run python -m runner --provider heavy-khomp
 - **Call didn't trigger (API error)**: Check `HEAVY_KHOMP_API_KEY` and `QA_PHONE_NUMBER` in `.env`. See `/providers:heavy-khomp` for full API reference.
 - **IVR not playing**: Mark fail, add a note with what happened. Continue the rest of the checklist.
 - **AMD test wrong result**: Mark fail. Note what the IVR did vs what was expected.
-- **Slack report didn't send**: Run `/ops:report` to resend manually.
+- **Slack report didn't send**: Run `/daily-qa:report` to resend manually.
 
 ---
 
@@ -114,6 +114,6 @@ uv run python -m runner --provider heavy-khomp
 ## Related skills
 
 - `/providers:heavy-khomp` — full API reference + troubleshooting for Heavy Khomp
-- `/qa:add-provider` — wire up Heavy FS, Lite Khomp, or Lite FS
-- `/ops:report` — resend or view the last report
+- `/daily-qa:add-provider` — wire up Heavy FS, Lite Khomp, or Lite FS
+- `/daily-qa:report` — resend or view the last report
 - `/ops:status` — check system health before running

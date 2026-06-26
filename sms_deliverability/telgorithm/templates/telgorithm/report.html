@@ -18,10 +18,10 @@
     </span>
   </div>
   <div style="display:flex; gap:8px;">
+    <a href="{{ url_for('telgorithm.company_analysis', slug=slug) }}"
+       class="btn btn-ghost" style="font-size:13px;">📊 Analysis</a>
     <a href="{{ url_for('telgorithm.download_csv', slug=slug, date=selected_date or '') }}"
-       class="btn btn-ghost" style="font-size:13px;">
-      ↓ Download CSV
-    </a>
+       class="btn btn-ghost" style="font-size:13px;">↓ Download CSV</a>
   </div>
 </div>
 

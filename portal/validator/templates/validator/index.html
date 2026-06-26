@@ -118,7 +118,7 @@
       class="btn btn-primary run-btn"
       data-scenario="{{ s.key }}"
       data-editable='{{ s.editable | tojson }}'
-      onclick="runTest('{{ s.key }}', {{ s.editable | tojson }})"
+      onclick="runTest('{{ s.key }}', JSON.parse(this.dataset.editable))"
       style="width:100%; justify-content:center; margin-top:auto;"
     >
       ▶ Run Test

@@ -23,6 +23,8 @@ def _fmt_num(n: int) -> str:
 
 
 def build_payload(label: str, companies: list[dict], failures_by_company: dict[str, list]) -> dict:
+    ALERT_THRESHOLD = 94
+
     blocks: list[dict] = [
         {
             "type": "header",
@@ -30,6 +32,17 @@ def build_payload(label: str, companies: list[dict], failures_by_company: dict[s
         },
         {"type": "divider"},
     ]
+
+    at_risk = [c for c in companies if c["delivered_rate"] < ALERT_THRESHOLD]
+    if at_risk:
+        alert_lines = ["🚨 *DELIVERY ALERT — Below 94% threshold*"]
+        for c in at_risk:
+            alert_lines.append(f"• *{c['name']}* — {c['delivered_rate']}% delivered ({_fmt_num(c['delivered'])}/{_fmt_num(c['total'])})")
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "\n".join(alert_lines)},
+        })
+        blocks.append({"type": "divider"})
 
     for c in companies:
         name = c["name"]

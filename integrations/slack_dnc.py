@@ -23,8 +23,11 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger("slack_dnc")
 
-DNC_URL     = "https://integrations.pipes.ai/api/lead/do-not-call/7l6OaLWvqXoBz9pDVeExbn3JwG2rP8jN"
-DNC_CHANNEL = os.environ.get("DNC_SLACK_CHANNEL", "")
+DNC_URL      = "https://integrations.pipes.ai/api/lead/do-not-call/7l6OaLWvqXoBz9pDVeExbn3JwG2rP8jN"
+# Comma-separated channel IDs, e.g. "C0AAA,C0BBB"
+_raw         = os.environ.get("DNC_SLACK_CHANNEL", "")
+DNC_CHANNELS = [c.strip() for c in _raw.split(",") if c.strip()]
+DNC_CHANNEL  = DNC_CHANNELS[0] if DNC_CHANNELS else ""  # kept for startup checks
 
 try:
     from portal.db import log_dnc as _db_log_dnc
@@ -83,7 +86,7 @@ def dnc_number(phone: str) -> bool:
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-def _startup_checks(bot_token: str, channel: str) -> None:
+def _startup_checks(bot_token: str, channels: list[str]) -> None:
     """Verify bot auth and channel membership at startup."""
     try:
         r = httpx.get("https://slack.com/api/auth.test",
@@ -92,33 +95,33 @@ def _startup_checks(bot_token: str, channel: str) -> None:
         if not d.get("ok"):
             log.warning(f"Slack auth failed: {d.get('error')} — check SLACK_BOT_TOKEN")
             return
-        bot_id = d.get("user_id", "")
-        log.info(f"Slack: authenticated as @{d.get('user')} ({bot_id}) in {d.get('team')}")
+        bot_name = d.get("user", "")
+        log.info(f"Slack: authenticated as @{bot_name} ({d.get('user_id')}) in {d.get('team')}")
 
-        if not channel:
+        if not channels:
             log.warning("DNC_SLACK_CHANNEL not set — watching ALL channels (not recommended for production)")
             return
 
-        ri = httpx.get(f"https://slack.com/api/conversations.info?channel={channel}",
-                       headers={"Authorization": f"Bearer {bot_token}"})
-        ci = ri.json()
-        if not ci.get("ok"):
-            log.error(
-                f"Channel {channel} not found (error={ci.get('error')}).\n"
-                f"  Fix: Open the channel in Slack → /invite @{d.get('user')} → copy the channel ID.\n"
-                f"  Then update DNC_SLACK_CHANNEL in .env and restart."
-            )
-            return
-
-        ch = ci.get("channel", {})
-        if ch.get("is_member"):
-            log.info(f"Bot is a member of #{ch.get('name')} ({channel}) ✅")
-        else:
-            log.error(
-                f"Bot is NOT in #{ch.get('name')} ({channel}).\n"
-                f"  Fix: In Slack, open #{ch.get('name')} and type:  /invite @{d.get('user')}\n"
-                f"  Then restart the bot."
-            )
+        for channel in channels:
+            ri = httpx.get(f"https://slack.com/api/conversations.info?channel={channel}",
+                           headers={"Authorization": f"Bearer {bot_token}"})
+            ci = ri.json()
+            if not ci.get("ok"):
+                log.error(
+                    f"Channel {channel} not found (error={ci.get('error')}).\n"
+                    f"  Fix: Open the channel in Slack → /invite @{bot_name} → copy the channel ID.\n"
+                    f"  Then update DNC_SLACK_CHANNEL in .env and restart."
+                )
+                continue
+            ch = ci.get("channel", {})
+            if ch.get("is_member"):
+                log.info(f"Bot is a member of #{ch.get('name')} ({channel}) ✅")
+            else:
+                log.error(
+                    f"Bot is NOT in #{ch.get('name')} ({channel}).\n"
+                    f"  Fix: In Slack, open #{ch.get('name')} and type:  /invite @{bot_name}\n"
+                    f"  Then restart the bot."
+                )
     except Exception as exc:
         log.warning(f"Startup check error: {exc}")
 
@@ -135,7 +138,7 @@ def main():
         print("    See /dnc:slack-bot for setup instructions.")
         raise SystemExit(1)
 
-    _startup_checks(bot_token, DNC_CHANNEL)
+    _startup_checks(bot_token, DNC_CHANNELS)
 
     app = App(token=bot_token)
 
@@ -151,8 +154,8 @@ def main():
         if reaction != TRIGGER_REACTION:
             return
 
-        if DNC_CHANNEL and channel_id != DNC_CHANNEL:
-            log.debug(f"Skipping — not the DNC channel ({channel_id})")
+        if DNC_CHANNELS and channel_id not in DNC_CHANNELS:
+            log.debug(f"Skipping — not a watched DNC channel ({channel_id})")
             return
 
         log.info(f"✔️  reaction in {channel_id} on ts={msg_ts} — fetching message...")
@@ -220,7 +223,7 @@ def main():
     def handle_message(event):
         pass
 
-    channel_label = DNC_CHANNEL or "(all channels — set DNC_SLACK_CHANNEL to restrict)"
+    channel_label = ", ".join(DNC_CHANNELS) if DNC_CHANNELS else "(all channels — set DNC_SLACK_CHANNEL to restrict)"
     print(f"  DNC bot starting — watching: {channel_label}")
     print(f"  Trigger: react ✔️  (heavy_check_mark) on any message with a phone number")
     print(f"  DNC endpoint: {DNC_URL}")

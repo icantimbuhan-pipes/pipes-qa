@@ -10,12 +10,15 @@
       <p>Aggregated metrics per company. Use the date bar to switch between daily uploads.</p>
     </div>
   </div>
-  {% if companies %}
-  <form method="post" action="{{ url_for('telgorithm.send_slack') }}">
-    <input type="hidden" name="date" value="{{ selected_date or '' }}">
-    <button type="submit" class="btn btn-primary" style="white-space:nowrap;">↗ Send to Slack</button>
-  </form>
-  {% endif %}
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <a href="{{ url_for('telgorithm.analysis') }}" class="btn btn-ghost" style="white-space:nowrap;">📊 Analysis</a>
+    {% if companies %}
+    <form method="post" action="{{ url_for('telgorithm.send_slack') }}">
+      <input type="hidden" name="date" value="{{ selected_date or '' }}">
+      <button type="submit" class="btn btn-primary" style="white-space:nowrap;">↗ Send to Slack</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 {# ── View toggle ── #}

@@ -1,4 +1,4 @@
-# /ops:report
+# /daily-qa:report
 
 View, resend, or export the last QA monitoring report.
 
@@ -7,7 +7,7 @@ View, resend, or export the last QA monitoring report.
 ## Usage
 
 ```
-/ops:report [--resend] [--provider <key>] [--last <n>]
+/daily-qa:report [--resend] [--provider <key>] [--last <n>]
 ```
 
 - `--resend` — resend the last report to Slack
@@ -41,7 +41,7 @@ View, resend, or export the last QA monitoring report.
    "
    ```
 
-4. If no reports exist yet, say so and suggest running `/qa:run`.
+4. If no reports exist yet, say so and suggest running `/daily-qa:run`.
 
 ---
 
