@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+{% block title %}QA Testing Assistant — Pipes.QA{% endblock %}
+
+{% block content %}
+<style>
+  .qa-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .qa-grid { grid-template-columns: 1fr; } }
+
+  .qa-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .qa-panel-head {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--text-muted);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .qa-panel-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .field-label {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .field-label span { font-weight: 400; text-transform: none; color: var(--text-secondary); letter-spacing: 0; }
+  input[type="text"], textarea, input[type="file"] {
+    width: 100%; padding: 8px 10px; font-size: 13px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: inherit; resize: vertical;
+    box-sizing: border-box;
+  }
+  input[type="text"]:focus, textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(91,106,240,.12);
+  }
+  input[type="file"] { padding: 6px 10px; cursor: pointer; }
+  textarea { min-height: 80px; }
+  textarea.mono { font-family: var(--mono); font-size: 12px; min-height: 100px; }
+
+  .section-divider {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--text-muted); padding: 4px 0 2px;
+    border-top: 1px solid var(--border); margin-top: 4px; padding-top: 14px;
+  }
+
+  /* Results panel */
+  .findings-wrap {
+    min-height: 300px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    font-family: inherit;
+  }
+  .findings-wrap.empty {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 13px; min-height: 300px;
+    flex-direction: column; gap: 10px; text-align: center;
+  }
+
+  .status-pass    { color: var(--green);  font-weight: 700; }
+  .status-fail    { color: var(--red);    font-weight: 700; }
+  .status-warning { color: var(--yellow); font-weight: 700; }
+
+  .findings-rendered h3 { font-size: 13px; font-weight: 700; margin: 16px 0 6px; }
+  .findings-rendered p  { margin: 4px 0; }
+  .findings-rendered hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .findings-rendered pre {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 12px;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+
+  .spinner {
+    display: none; width: 20px; height: 20px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .setup-panel {
+    border-radius: 8px; padding: 16px 18px; font-size: 13px;
+    margin-bottom: 16px; border: 1px solid;
+  }
+  .setup-panel.active {
+    background: var(--green-bg); border-color: var(--green-border); color: var(--green);
+  }
+  .setup-panel.warn {
+    background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--text);
+  }
+  .setup-options { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+  .setup-option {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px;
+  }
+  .setup-option-title { font-weight:700; margin-bottom:3px; }
+  .setup-option code {
+    font-family: var(--mono); font-size:11.5px; background:var(--bg);
+    padding:1px 5px; border-radius:3px; border:1px solid var(--border);
+  }
+  .badge-free {
+    display:inline-block; font-size:10px; font-weight:700; letter-spacing:.05em;
+    background:var(--green-bg); color:var(--green); border:1px solid var(--green-border);
+    border-radius:20px; padding:1px 7px; margin-left:6px; vertical-align:middle;
+  }
+  .badge-paid {
+    display:inline-block; font-size:10px; font-weight:700; letter-spacing:.05em;
+    background:var(--yellow-bg); color:var(--yellow); border:1px solid var(--yellow-border);
+    border-radius:20px; padding:1px 7px; margin-left:6px; vertical-align:middle;
+  }
+
+  .result-summary {
+    display: none;
+    padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;
+    font-size: 13px; font-weight: 600;
+  }
+  .result-summary.pass   { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+  .result-summary.fail   { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+  .result-summary.partial{ background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+</style>
+
+<div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div class="page-header" style="margin:0;">
+    <h1>QA Testing Assistant</h1>
+    <p>Submit evidence — screenshots, logs, API responses, CSV files — and get a structured findings report.</p>
+  </div>
+  <a href="{{ url_for('qa_test.history') }}" class="btn btn-ghost" style="white-space:nowrap; padding:6px 14px; font-size:13px;">📋 History</a>
+</div>
+
+{% if has_backend %}
+<div class="setup-panel active">
+  ✅ AI backend active — <strong>{{ backend_label }}</strong>.
+  Ready to analyze.
+</div>
+{% else %}
+<div class="setup-panel warn">
+  <strong>⚠ No AI backend configured.</strong>
+  Choose one of the free options below and add it to your <code>.env</code>, then restart the portal.
+
+  <div class="setup-options">
+
+    <div class="setup-option">
+      <div class="setup-option-title">
+        Option 1 — Groq <span class="badge-free">FREE</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+        Free cloud API — sign up at <strong>console.groq.com</strong>, create an API key (takes 2 min).
+        Uses LLaMA 3.3 70B. No credit card required.
+      </div>
+      Add to <code>.env</code>:
+      <code>GROQ_API_KEY=gsk_...</code>
+    </div>
+
+    <div class="setup-option">
+      <div class="setup-option-title">
+        Option 2 — Ollama (local) <span class="badge-free">FREE</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+        Runs a model on your Mac — no internet or account needed.
+        Install from <strong>ollama.com</strong>, then run <code>ollama pull llama3.2</code> in Terminal.
+      </div>
+      Add to <code>.env</code>:
+      <code>OLLAMA_MODEL=llama3.2</code>
+    </div>
+
+    <div class="setup-option">
+      <div class="setup-option-title">
+        Option 3 — Anthropic Claude <span class="badge-paid">PAID</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+        Paid API — best quality, supports screenshot analysis.
+        Get a key at <strong>console.anthropic.com</strong>.
+      </div>
+      Add to <code>.env</code>:
+      <code>ANTHROPIC_API_KEY=sk-ant-...</code>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+<form id="qa-form" enctype="multipart/form-data">
+<div class="qa-grid">
+
+  {# ── Left: Evidence input ── #}
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    {# Feature info #}
+    <div class="qa-panel">
+      <div class="qa-panel-head">Test context</div>
+      <div class="qa-panel-body">
+        <div class="field-group">
+          <label class="field-label" for="feature_name">Feature name</label>
+          <input type="text" id="feature_name" name="feature_name" placeholder="e.g. Signalmash Analysis Page">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="user_story">User story / Requirements <span>— acceptance criteria or spec</span></label>
+          <textarea id="user_story" name="user_story" placeholder="As a QA engineer, I want to...&#10;&#10;Acceptance criteria:&#10;- ..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    {# Steps + results #}
+    <div class="qa-panel">
+      <div class="qa-panel-head">Test steps &amp; results</div>
+      <div class="qa-panel-body">
+        <div class="field-group">
+          <label class="field-label" for="test_steps">Test steps</label>
+          <textarea id="test_steps" name="test_steps" placeholder="1. Navigate to /signalmash/analysis&#10;2. Click 'Last 3 months'&#10;3. Check the client health table..."></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="expected">Expected results</label>
+          <textarea id="expected" name="expected" placeholder="The delivery rate should show 86.34%..."></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="actual">Actual results</label>
+          <textarea id="actual" name="actual" placeholder="The page shows a 500 Internal Server Error..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    {# UI + Export evidence #}
+    <div class="qa-panel">
+      <div class="qa-panel-head">UI &amp; export evidence</div>
+      <div class="qa-panel-body">
+        <div class="field-group">
+          <label class="field-label" for="screenshots">Screenshots <span>— PNG/JPG, multiple allowed</span></label>
+          <input type="file" id="screenshots" name="screenshots" accept="image/*" multiple>
+        </div>
+
+        {# Multi-table header comparison builder #}
+        <div class="field-group">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <label class="field-label" style="margin:0;">UI table headers <span>— copy-paste from browser</span></label>
+            <button type="button" id="add-table-btn" class="btn btn-ghost"
+              style="padding:3px 10px; font-size:11px; font-weight:600;">+ Add table</button>
+          </div>
+          <div id="table-pairs" style="display:flex; flex-direction:column; gap:10px;">
+            {# First pair — always visible #}
+            <div class="table-pair" style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--bg); border-bottom:1px solid var(--border);">
+                <input type="text" class="pair-name" placeholder="Table / page name (e.g. Inbound Integration Requests)"
+                  style="flex:1; padding:4px 8px; font-size:12px; min-height:unset;">
+                <button type="button" class="remove-pair btn btn-ghost"
+                  style="padding:2px 8px; font-size:11px; color:var(--red); display:none;">✕</button>
+              </div>
+              <textarea class="pair-headers mono" rows="2"
+                style="border:none; border-bottom:1px solid var(--border); border-radius:0; resize:vertical; min-height:60px;"
+                placeholder="Date | Type | Phone Number | Lead | URL | Parameters(Response>Status)"></textarea>
+              <div style="padding:6px 10px; background:var(--bg);">
+                <input type="file" class="pair-csv" accept=".csv,.xlsx,.xls" multiple
+                  style="border:none; background:transparent; padding:2px 0; font-size:12px;">
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+            Each table gets its own header set + CSV file. Use <strong>+ Add table</strong> to compare multiple pages at once.
+          </div>
+          {# Hidden combined field sent to backend #}
+          <textarea id="ui_headers" name="ui_headers" style="display:none;"></textarea>
+          <input type="file" id="csv_files" name="csv_files" accept=".csv,.xlsx,.xls" multiple style="display:none;">
+        </div>
+      </div>
+    </div>
+
+    {# Technical evidence #}
+    <div class="qa-panel">
+      <div class="qa-panel-head">Technical evidence</div>
+      <div class="qa-panel-body">
+        <div class="field-group">
+          <label class="field-label" for="api_response">API response <span>— JSON payload or status code</span></label>
+          <textarea class="mono" id="api_response" name="api_response"
+            placeholder='{"status": 200, "data": {...}}'></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="db_records">Database records <span>— raw rows or query output</span></label>
+          <textarea class="mono" id="db_records" name="db_records"
+            placeholder="id | company_name | dlr_code | count&#10;1  | HTM Primary  | 300      | 13010"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="error_logs">Error logs / console output</label>
+          <textarea class="mono" id="error_logs" name="error_logs"
+            placeholder="AttributeError: type object 'datetime.date' has no attribute 'strptime'&#10;  File routes.py, line 439..."></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="extra_notes">Additional notes</label>
+          <textarea id="extra_notes" name="extra_notes" placeholder="Any other context..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" id="check-headers-btn" class="btn btn-ghost"
+      style="width:100%; justify-content:center; padding:11px; font-size:13px; font-weight:700; border:2px solid var(--border);">
+      🔍 Check Headers (no AI)
+    </button>
+    <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;"
+      {% if not has_backend %}disabled title="Configure an AI backend in .env first"{% endif %}>
+      Run Full QA Analysis →
+    </button>
+  </div>
+
+  {# ── Right: Findings output ── #}
+  <div style="position:sticky; top:20px; display:flex; flex-direction:column; gap:12px;">
+    <div class="qa-panel" style="min-height:500px;">
+      <div class="qa-panel-head">
+        QA Findings
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="spinner" id="spinner"></div>
+          <button type="button" id="slack-btn" class="btn btn-ghost"
+            style="padding:3px 10px; font-size:11px; display:none;">↗ Slack</button>
+          <button type="button" id="copy-btn" class="btn btn-ghost"
+            style="padding:3px 10px; font-size:11px; display:none;">Copy</button>
+          <button type="button" id="clear-btn" class="btn btn-ghost"
+            style="padding:3px 10px; font-size:11px; display:none;">Clear</button>
+        </div>
+      </div>
+      <div class="qa-panel-body">
+        <div id="result-summary" class="result-summary"></div>
+        <div id="findings-output" class="findings-wrap empty">
+          <div style="font-size:32px;">🔍</div>
+          <div>Fill in the evidence on the left and click <strong>Run QA Analysis</strong>.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</form>
+
+<script>
+const form     = document.getElementById('qa-form');
+const output   = document.getElementById('findings-output');
+const spinner  = document.getElementById('spinner');
+const checkBtn = document.getElementById('check-headers-btn');
+const slackBtn = document.getElementById('slack-btn');
+const copyBtn  = document.getElementById('copy-btn');
+const clearBtn = document.getElementById('clear-btn');
+const summary  = document.getElementById('result-summary');
+let lastFindings = '';
+
+// ── Multi-table pair management ──────────────────────────────────────────────
+
+document.getElementById('add-table-btn').addEventListener('click', () => {
+  const container = document.getElementById('table-pairs');
+  const idx = container.querySelectorAll('.table-pair').length + 1;
+  const div = document.createElement('div');
+  div.className = 'table-pair';
+  div.style.cssText = 'border:1px solid var(--border); border-radius:6px; overflow:hidden;';
+  div.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--bg); border-bottom:1px solid var(--border);">
+      <input type="text" class="pair-name" placeholder="Table / page name"
+        style="flex:1; padding:4px 8px; font-size:12px; min-height:unset;">
+      <button type="button" class="remove-pair btn btn-ghost"
+        style="padding:2px 8px; font-size:11px; color:var(--red);">✕ Remove</button>
+    </div>
+    <textarea class="pair-headers mono" rows="2"
+      style="border:none; border-bottom:1px solid var(--border); border-radius:0; resize:vertical; min-height:60px;"
+      placeholder="Header1 | Header2 | Header3"></textarea>
+    <div style="padding:6px 10px; background:var(--bg);">
+      <input type="file" class="pair-csv" accept=".csv,.xlsx,.xls" multiple
+        style="border:none; background:transparent; padding:2px 0; font-size:12px;">
+    </div>`;
+  container.appendChild(div);
+  _updateRemoveButtons();
+});
+
+document.getElementById('table-pairs').addEventListener('click', (e) => {
+  if (e.target.classList.contains('remove-pair')) {
+    e.target.closest('.table-pair').remove();
+    _updateRemoveButtons();
+  }
+});
+
+function _updateRemoveButtons() {
+  const pairs = document.querySelectorAll('.table-pair');
+  pairs.forEach((p, i) => {
+    const btn = p.querySelector('.remove-pair');
+    if (btn) btn.style.display = pairs.length > 1 ? 'inline-flex' : 'none';
+  });
+}
+
+function _buildHeadersAndFiles(fd) {
+  // Combine all table pairs into labeled sections for ui_headers
+  // and collect all CSV files into csv_files
+  const pairs = document.querySelectorAll('.table-pair');
+  const sections = [];
+  pairs.forEach((pair, i) => {
+    const name    = (pair.querySelector('.pair-name').value || `Table ${i + 1}`).trim();
+    const headers = (pair.querySelector('.pair-headers').value || '').trim();
+    if (headers) {
+      sections.push(`=== ${name} ===\n${headers}`);
+    }
+    const csvInput = pair.querySelector('.pair-csv');
+    if (csvInput && csvInput.files.length) {
+      for (const file of csvInput.files) {
+        fd.append('csv_files', file, file.name);
+      }
+    }
+  });
+  fd.set('ui_headers', sections.join('\n\n'));
+}
+
+// ── Form submit ──────────────────────────────────────────────────────────────
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  output.className = 'findings-wrap';
+  output.innerHTML = '';
+  summary.style.display = 'none';
+  copyBtn.style.display = 'none';
+  clearBtn.style.display = 'none';
+  spinner.style.display = 'block';
+
+  const fd = new FormData(form);
+  _buildHeadersAndFiles(fd);
+
+  try {
+    const resp = await fetch('/qa-test/analyze', { method: 'POST', body: fd });
+    const data = await resp.json();
+
+    spinner.style.display = 'none';
+
+    if (!data.ok) {
+      output.innerHTML = `<span style="color:var(--red);">❌ Error: ${escHtml(data.error)}</span>`;
+      return;
+    }
+
+    lastFindings = data.findings;
+    output.innerHTML = renderFindings(data.findings);
+    if (data.backend_label) {
+      document.querySelector('.qa-panel-head').childNodes[0].textContent =
+        `QA Findings · ${data.backend_label} `;
+    }
+    slackBtn.style.display = 'block';
+    copyBtn.style.display = 'block';
+    clearBtn.style.display = 'block';
+
+    // Parse result for summary banner
+    const text = data.findings.toLowerCase();
+    const resultLine = data.findings.match(/Result:\s*(PASS|FAIL|PARTIAL)/i);
+    if (resultLine) {
+      const r = resultLine[1].toUpperCase();
+      summary.textContent = r === 'PASS' ? '✅ Result: PASS' : r === 'FAIL' ? '❌ Result: FAIL' : '⚠️ Result: PARTIAL';
+      summary.className = 'result-summary ' + (r === 'PASS' ? 'pass' : r === 'FAIL' ? 'fail' : 'partial');
+      summary.style.display = 'block';
+    }
+
+  } catch (err) {
+    spinner.style.display = 'none';
+    output.innerHTML = `<span style="color:var(--red);">❌ Network error: ${escHtml(err.message)}</span>`;
+  }
+});
+
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(lastFindings).then(() => {
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+  });
+});
+
+clearBtn.addEventListener('click', () => {
+  output.className = 'findings-wrap empty';
+  output.innerHTML = '<div style="font-size:32px;">🔍</div><div>Fill in the evidence on the left and click <strong>Run QA Analysis</strong>.</div>';
+  summary.style.display = 'none';
+  slackBtn.style.display = 'none';
+  copyBtn.style.display = 'none';
+  clearBtn.style.display = 'none';
+  lastFindings = '';
+});
+
+// ── Check Headers (no AI) ────────────────────────────────────────────────────
+
+checkBtn.addEventListener('click', async () => {
+  output.className = 'findings-wrap';
+  output.innerHTML = '';
+  summary.style.display = 'none';
+  slackBtn.style.display = 'none';
+  copyBtn.style.display = 'none';
+  clearBtn.style.display = 'none';
+  spinner.style.display = 'block';
+  checkBtn.disabled = true;
+
+  const fd = new FormData();
+  _buildHeadersAndFiles(fd);
+
+  try {
+    const resp = await fetch('/qa-test/check-headers', { method: 'POST', body: fd });
+    const data = await resp.json();
+    spinner.style.display = 'none';
+    checkBtn.disabled = false;
+
+    if (!data.ok) {
+      output.innerHTML = `<span style="color:var(--red);">❌ ${escHtml(data.error)}</span>`;
+      return;
+    }
+
+    lastFindings = buildHeaderText(data);   // plain text — used by Copy + Slack
+    output.innerHTML = renderHeaderResults(data);  // HTML display only
+
+    const cls = data.overall === 'PASS' ? 'pass' : data.overall === 'FAIL' ? 'fail' : 'partial';
+    const lbl = data.overall === 'PASS' ? '✅ All tables match'
+              : data.overall === 'FAIL' ? '❌ One or more tables have mismatched headers'
+              : '⚠️ Some tables could not be checked';
+    summary.textContent = lbl;
+    summary.className = 'result-summary ' + cls;
+    summary.style.display = 'block';
+    slackBtn.style.display = 'block';
+    copyBtn.style.display = 'block';
+    clearBtn.style.display = 'block';
+
+  } catch (err) {
+    spinner.style.display = 'none';
+    checkBtn.disabled = false;
+    output.innerHTML = `<span style="color:var(--red);">❌ ${escHtml(err.message)}</span>`;
+  }
+});
+
+function buildHeaderText(data) {
+  // Plain text for Copy and Slack — no HTML tags
+  const feature = (document.getElementById('feature_name') || {}).value || '';
+  const lines = [];
+  if (feature) lines.push(`Feature: ${feature}`);
+  lines.push(`Header Comparison — ${data.overall}`);
+  lines.push('─────────────────────────────────');
+  for (const r of data.results) {
+    const icon = r.status === 'PASS' ? '✅' : r.status === 'FAIL' ? '❌' : r.status === 'SKIP' ? '⏭' : '⚠️';
+    lines.push(`${icon} ${r.table} — ${r.message}`);
+    if (r.filename)                    lines.push(`   CSV: ${r.filename}`);
+    if (r.missing && r.missing.length) lines.push(`   Missing in CSV: ${r.missing.join(', ')}`);
+    if (r.extra   && r.extra.length)   lines.push(`   Extra in CSV (not in UI): ${r.extra.join(', ')}`);
+    lines.push('');
+  }
+  lines.push('─────────────────────────────────');
+  const passCount = data.results.filter(r => r.status === 'PASS').length;
+  const failCount = data.results.filter(r => r.status === 'FAIL').length;
+  const skipCount = data.results.filter(r => r.status === 'SKIP').length;
+  lines.push(`Result: ${passCount} matched · ${failCount} mismatched · ${skipCount} skipped`);
+  return lines.join('\n');
+}
+
+function renderHeaderResults(data) {
+  const lines = [];
+  lines.push(`<strong style="font-size:14px;">Header Comparison — ${escHtml(data.overall)}</strong>`);
+  lines.push(`<hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">`);
+
+  for (const r of data.results) {
+    const icon = r.status === 'PASS' ? '✅' : r.status === 'FAIL' ? '❌' : r.status === 'SKIP' ? '⏭' : '⚠️';
+    const cls  = r.status === 'PASS' ? 'status-pass' : r.status === 'FAIL' ? 'status-fail' : 'status-warning';
+    lines.push(`<span class="${cls}">${icon} <strong>${escHtml(r.table)}</strong> — ${escHtml(r.message)}</span>`);
+    if (r.filename) {
+      lines.push(`   <span style="font-size:12px;color:var(--text-muted);">CSV: ${escHtml(r.filename)}</span>`);
+    }
+    if (r.missing && r.missing.length) {
+      lines.push(`   <strong style="color:var(--red);">Missing in CSV:</strong> ${r.missing.map(escHtml).join(', ')}`);
+    }
+    if (r.extra && r.extra.length) {
+      lines.push(`   <span style="color:var(--text-muted);">Extra in CSV (not in UI): ${r.extra.map(escHtml).join(', ')}</span>`);
+    }
+    lines.push('');
+  }
+
+  lines.push(`<hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">`);
+  const passCount = data.results.filter(r => r.status === 'PASS').length;
+  const failCount = data.results.filter(r => r.status === 'FAIL').length;
+  const skipCount = data.results.filter(r => r.status === 'SKIP').length;
+  lines.push(`<strong>Result: ${passCount} matched · ${failCount} mismatched · ${skipCount} skipped</strong>`);
+  return lines.join('\n');
+}
+
+slackBtn.addEventListener('click', async () => {
+  if (!lastFindings) return;
+  const orig = slackBtn.textContent;
+  slackBtn.textContent = 'Sending…';
+  slackBtn.disabled = true;
+  try {
+    const featureName = (document.getElementById('feature_name') || {}).value || '';
+    const resp = await fetch('/qa-test/send-slack', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({findings: lastFindings, feature: featureName})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      slackBtn.textContent = 'Sent!';
+      setTimeout(() => { slackBtn.textContent = orig; slackBtn.disabled = false; }, 3000);
+    } else {
+      slackBtn.textContent = 'Failed';
+      slackBtn.title = data.error || 'Unknown error';
+      setTimeout(() => { slackBtn.textContent = orig; slackBtn.disabled = false; slackBtn.title = ''; }, 4000);
+    }
+  } catch (err) {
+    slackBtn.textContent = 'Error';
+    setTimeout(() => { slackBtn.textContent = orig; slackBtn.disabled = false; }, 4000);
+  }
+});
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderFindings(text) {
+  // Color status lines and format the output nicely
+  return text
+    .split('\n')
+    .map(line => {
+      const esc = escHtml(line);
+      if (/^Status:\s*✅/.test(line))  return `<span class="status-pass">${esc}</span>`;
+      if (/^Status:\s*❌/.test(line))  return `<span class="status-fail">${esc}</span>`;
+      if (/^Status:\s*⚠️/.test(line)) return `<span class="status-warning">${esc}</span>`;
+      if (/^(Issue|Expected|Actual|Evidence|Recommendation|Possible Root Cause):/.test(line))
+        return `<strong>${esc}</strong>`;
+      if (/^─+$/.test(line)) return `<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">`;
+      if (/^Test Scenario:/.test(line)) return `<strong style="font-size:14px;">${esc}</strong>`;
+      if (/^Result:/.test(line)) return `<strong style="font-size:14px;">${esc}</strong>`;
+      if (/^Issues Found:/.test(line)) return `<strong>${esc}</strong>`;
+      if (/^Recommendations:/.test(line)) return `<strong>${esc}</strong>`;
+      return esc;
+    })
+    .join('\n');
+}
+</script>
+{% endblock %}

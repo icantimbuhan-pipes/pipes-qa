@@ -17,7 +17,7 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat $PID_FILE)" 2>/dev/null; then
   echo "Portal already running (PID $(cat $PID_FILE)) → http://localhost:5050"
 else
   cd "$DIR"
-  nohup python3 -m portal >> "$LOG_FILE" 2>&1 &
+  nohup /Users/iccantimbuhangmail.com/.local/bin/uv run python -m portal >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "✓ Portal started (PID $!) → http://localhost:5050"
 fi

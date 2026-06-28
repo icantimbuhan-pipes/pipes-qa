@@ -482,59 +482,109 @@
       <span class="nav-icon">📊</span> Dashboard
     </a>
 
+    {% if not current_user.is_authenticated or current_user.can('daily_qa') or current_user.can('hourly_qa') or current_user.can('quick_report') %}
     <div class="nav-sep"></div>
     <div class="nav-group-label">QA Runs</div>
+    {% if not current_user.is_authenticated or current_user.can('daily_qa') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('daily_qa.') and not request.args.get('preset','').startswith('hourly') %}active{% endif %}"
        href="{{ url_for('daily_qa.pick') }}">
       <span class="nav-icon">✅</span> Daily QA
     </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('hourly_qa') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('daily_qa.') and request.args.get('preset','').startswith('hourly') %}active{% endif %}"
        href="{{ url_for('daily_qa.pick', preset='hourly-heavy-khomp') }}">
       <span class="nav-icon">⏱</span> Hourly QA
     </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('quick_report') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('quick_report.') %}active{% endif %}"
        href="{{ url_for('quick_report.index') }}">
       <span class="nav-icon">📤</span> Quick Report
     </a>
+    {% endif %}
+    {% endif %}
 
+    {% if not current_user.is_authenticated or current_user.can('checklists') or current_user.can('api_configs') %}
     <div class="nav-sep"></div>
     <div class="nav-group-label">Configuration</div>
+    {% if not current_user.is_authenticated or current_user.can('checklists') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('checklists.') %}active{% endif %}"
        href="{{ url_for('checklists.index') }}">
       <span class="nav-icon">📋</span> Checklists
     </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('api_configs') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('api_configs.') %}active{% endif %}"
        href="{{ url_for('api_configs.index') }}">
       <span class="nav-icon">🔑</span> API Configs
     </a>
+    {% endif %}
+    {% endif %}
 
+    {% if not current_user.is_authenticated or current_user.can('sms') or current_user.can('dnc') %}
     <div class="nav-sep"></div>
     <div class="nav-group-label">Channels</div>
+    {% if not current_user.is_authenticated or current_user.can('sms') %}
     <a class="nav-item {% if request.endpoint and (request.endpoint == 'upload' or request.endpoint.startswith('telgorithm.') or request.endpoint.startswith('signalmash.') or request.endpoint.startswith('commio.')) %}active{% endif %}" href="/upload">
       <span class="nav-icon">💬</span> SMS
     </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('dnc') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('dnc.') %}active{% endif %}"
        href="/dnc">
       <span class="nav-icon">🚫</span> DNC
     </a>
+    {% endif %}
+    {% endif %}
 
+    {% if not current_user.is_authenticated or current_user.can('validator') or current_user.can('maintenance') or current_user.can('qa_test') %}
     <div class="nav-sep"></div>
-    <div class="nav-group-label">System</div>
+    <div class="nav-group-label">Tools</div>
+    {% if not current_user.is_authenticated or current_user.can('qa_test') %}
+    <a class="nav-item {% if request.endpoint and request.endpoint.startswith('qa_test.') %}active{% endif %}"
+       href="{{ url_for('qa_test.index') }}">
+      <span class="nav-icon">🔍</span> QA Testing
+    </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('validator') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('validator.') %}active{% endif %}"
        href="{{ url_for('validator.index') }}">
       <span class="nav-icon">🧪</span> Validator
     </a>
+    {% endif %}
+    {% if not current_user.is_authenticated or current_user.can('maintenance') %}
     <a class="nav-item {% if request.endpoint and request.endpoint.startswith('maintenance.') %}active{% endif %}"
        href="{{ url_for('maintenance.index') }}">
       <span class="nav-icon">⚙</span> Maintenance
     </a>
+    {% endif %}
+    {% endif %}
+
+    {% if current_user.is_authenticated and current_user.can('admin') %}
+    <div class="nav-sep"></div>
+    <div class="nav-group-label">Admin</div>
+    <a class="nav-item {% if request.endpoint and request.endpoint.startswith('admin_panel.') and 'permission' not in request.endpoint %}active{% endif %}"
+       href="{{ url_for('admin_panel.users') }}">
+      <span class="nav-icon">👤</span> Users
+    </a>
+    <a class="nav-item {% if request.endpoint and 'permission' in request.endpoint %}active{% endif %}"
+       href="{{ url_for('admin_panel.permissions') }}">
+      <span class="nav-icon">🔐</span> Permissions
+    </a>
+    {% endif %}
 
   </nav>
 
   <div class="sidebar-footer">
     <div class="sidebar-footer-card">
+      {% if current_user.is_authenticated %}
+      <div class="title">{{ current_user.username }}</div>
+      <div class="sub">{{ current_user.role_name }} · Pipes.QA</div>
+      {% else %}
       <div class="title">Pipes.QA Portal</div>
       <div class="sub">Daily QA &amp; Monitoring</div>
+      {% endif %}
     </div>
   </div>
 
@@ -551,8 +601,17 @@
       <span class="current">{% block breadcrumb %}Portal{% endblock %}</span>
     </div>
     <div class="topbar-right">
-      <span class="topbar-username">Ian Cantimbuhan</span>
-      <div class="topbar-avatar">IC</div>
+      {% if current_user.is_authenticated %}
+      <span class="topbar-username">{{ current_user.username }}</span>
+      <div class="topbar-avatar" title="{{ current_user.email }}">{{ current_user.get_initials() }}</div>
+      <a href="{{ url_for('auth.logout') }}"
+         style="font-size:12px; color:var(--text-muted); text-decoration:none; padding:5px 10px;
+                border:1px solid var(--border); border-radius:6px; transition:all .15s;"
+         onmouseover="this.style.color='var(--red)';this.style.borderColor='var(--red-border)'"
+         onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">
+        Sign out
+      </a>
+      {% endif %}
     </div>
   </header>
 

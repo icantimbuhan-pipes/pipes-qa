@@ -3,7 +3,32 @@
     "allow": [
       "Bash(ls -la /Users/iccantimbuhangmail.com/.claude/commands/ 2>/dev/null || echo \"no commands dir yet\")",
       "Read(//Users/iccantimbuhangmail.com/.claude/**)",
-      "Bash(mkdir -p \\\\ *)"
+      "Bash(mkdir -p \\\\ *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(curl -LsSf https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "Bash(git add *)",
+      "Read(//Users/iccantimbuhangmail.com/**)",
+      "Bash(echo 'source $HOME/.local/bin/env')",
+      "Bash(uv run python -c ' *)",
+      "Bash(ipconfig getifaddr *)",
+      "Bash(brew install *)",
+      "Bash(brew list *)",
+      "Bash(sudo systemsetup -getremotelogin)",
+      "Bash(/Applications/Tailscale.app/Contents/MacOS/Tailscale ip *)",
+      "Bash(mkdir -p /Users/iccantimbuhangmail.com/Pipes.QA/integrations && touch /Users/iccantimbuhangmail.com/Pipes.QA/integrations/__init__.py && mkdir -p /Users/iccantimbuhangmail.com/Pipes.QA/.claude/commands/dnc)",
+      "Bash(pkill -f \"integrations.slack_dnc\")",
+      "Bash(~/.local/bin/uv run python -c ' *)",
+      "Bash(git commit *)",
+      "Bash(grep -v \"^\\\\.$\")",
+      "Bash(uv sync *)",
+      "Bash(pip3 install *)",
+      "Bash(brew --version)",
+      "Bash(git pull *)",
+      "Bash(git merge *)"
     ],
     "additionalDirectories": [
       "/Users/iccantimbuhangmail.com/Pipes.QA/.claude/commands"

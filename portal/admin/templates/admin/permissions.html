@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Permissions — Pipes.QA Admin{% endblock %}
+{% block breadcrumb %}Admin / Permissions{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .perm-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+  .perm-tab {
+    padding:7px 16px; border-radius:20px; font-size:13px; font-weight:500;
+    text-decoration:none; border:1px solid var(--border); color:var(--text-secondary);
+    transition: all .15s; cursor:pointer;
+  }
+  .perm-tab:hover  { background:var(--purple-dim); color:var(--purple); border-color:var(--purple); }
+  .perm-tab.active { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .perm-tab.system { opacity:.55; }
+
+  .perm-table th, .perm-table td { padding:10px 14px; }
+  .perm-table td:first-child { font-weight:500; }
+  .perm-col { text-align:center; }
+  .perm-col input[type="checkbox"] {
+    width:16px; height:16px; cursor:pointer; accent-color:var(--purple);
+  }
+  .page-icon { margin-right:6px; font-size:14px; }
+  .perm-admin-note {
+    background:var(--purple-light); border:1px solid rgba(94,53,177,.2);
+    border-radius:8px; padding:12px 16px; font-size:13px; color:var(--purple);
+    margin-bottom:20px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h1>Permissions</h1>
+    <p>Control which pages and features each role can access.</p>
+  </div>
+  <a href="{{ url_for('admin_panel.users') }}" class="btn btn-ghost">👤 Users</a>
+</div>
+
+{# Role tabs #}
+<div class="perm-tabs">
+  {% for role in roles %}
+  <a href="{{ url_for('admin_panel.permissions', role_id=role['id']) }}"
+     class="perm-tab {% if role['id'] == selected_role_id %}active{% endif %} {% if role['is_system'] %}system{% endif %}">
+    {{ role['name'] }}
+  </a>
+  {% endfor %}
+</div>
+
+{% if selected_role_id %}
+  {% for role in roles if role['id'] == selected_role_id %}
+
+  {% if role['name'] == 'Admin' %}
+  <div class="perm-admin-note">
+    ⚡ The <strong>Admin</strong> role always has full access to all pages. Permissions cannot be restricted.
+  </div>
+  {% else %}
+
+  <form method="post">
+    <input type="hidden" name="action" value="save_perms">
+    <input type="hidden" name="role_id" value="{{ selected_role_id }}">
+
+    <div class="card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <div style="font-weight:600;">{{ role['name'] }} — Page Permissions</div>
+        <button type="submit" class="btn btn-primary" style="padding:7px 18px; font-size:13px;">Save Changes</button>
+      </div>
+
+      <div class="table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+        <table class="perm-table">
+          <thead>
+            <tr>
+              <th>Page / Module</th>
+              <th class="perm-col">View</th>
+              <th class="perm-col">Edit</th>
+              <th class="perm-col">Delete</th>
+              <th class="perm-col">Admin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for page in pages %}
+            {% set rp = all_perms.get(selected_role_id, {}).get(page['id'], {}) %}
+            <tr>
+              <td>
+                <span class="page-icon">{{ page['icon'] }}</span>{{ page['name'] }}
+                <div style="font-size:11px; color:var(--text-muted); font-family:var(--mono);">{{ page['url_prefix'] or '/' }}</div>
+              </td>
+              <td class="perm-col">
+                <input type="checkbox" name="view_{{ page['id'] }}" value="1"
+                  {% if rp.get('can_view') %}checked{% endif %}>
+              </td>
+              <td class="perm-col">
+                <input type="checkbox" name="edit_{{ page['id'] }}" value="1"
+                  {% if rp.get('can_edit') %}checked{% endif %}>
+              </td>
+              <td class="perm-col">
+                <input type="checkbox" name="del_{{ page['id'] }}" value="1"
+                  {% if rp.get('can_delete') %}checked{% endif %}>
+              </td>
+              <td class="perm-col">
+                <input type="checkbox" name="adm_{{ page['id'] }}" value="1"
+                  {% if rp.get('is_admin') %}checked{% endif %}>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+  {% endfor %}
+{% endif %}
+
+{# Create role + Delete role #}
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px;">
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:14px;">Create New Role</div>
+    <form method="post">
+      <input type="hidden" name="action" value="create_role">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <label>Role name</label>
+          <input type="text" name="role_name" placeholder="e.g. Team Lead" required>
+        </div>
+        <div>
+          <label>Description</label>
+          <input type="text" name="role_desc" placeholder="Brief description">
+        </div>
+        <button type="submit" class="btn btn-ghost" style="justify-content:center;">Create Role</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:14px;">Delete Role</div>
+    <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+      Only custom (non-system) roles can be deleted. Users assigned to the deleted role will lose their role.
+    </p>
+    <form method="post" onsubmit="return confirm('Delete this role? Users assigned to it will lose their role.')">
+      <input type="hidden" name="action" value="delete_role">
+      <div style="display:flex; gap:10px;">
+        <select name="role_id" style="flex:1;">
+          {% for role in roles if not role['is_system'] %}
+          <option value="{{ role['id'] }}">{{ role['name'] }}</option>
+          {% else %}
+          <option disabled>No custom roles</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-danger" style="white-space:nowrap;">Delete</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

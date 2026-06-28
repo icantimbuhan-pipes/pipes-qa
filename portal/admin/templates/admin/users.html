@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}User Management — Pipes.QA Admin{% endblock %}
+{% block breadcrumb %}Admin / Users{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h1>User Management</h1>
+    <p>Create and manage portal accounts, assign roles, and control access.</p>
+  </div>
+  <div style="display:flex; gap:10px;">
+    <a href="{{ url_for('admin_panel.permissions') }}" class="btn btn-ghost">🔐 Permissions</a>
+    <a href="{{ url_for('admin_panel.user_new') }}" class="btn btn-primary">+ New User</a>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Last Login</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:32px; height:32px; background:linear-gradient(135deg,var(--purple),#9c27b0);
+                        border-radius:50%; display:flex; align-items:center; justify-content:center;
+                        font-size:12px; font-weight:600; color:#fff; flex-shrink:0;">
+              {{ u['username'][:2].upper() }}
+            </div>
+            <div>
+              <div style="font-weight:500;">{{ u['username'] }}</div>
+              {% if u['id']|string == current_user.id %}
+              <div style="font-size:11px; color:var(--text-muted);">you</div>
+              {% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="mono" style="font-size:12px;">{{ u['email'] }}</td>
+        <td>
+          {% set role_colors = {'Admin': 'badge-purple', 'Manager': 'badge-blue', 'QA': 'badge-pass', 'Viewer': 'badge-pending'} %}
+          <span class="badge {{ role_colors.get(u['role_name'], 'badge-pending') }}">
+            {{ u['role_name'] or '—' }}
+          </span>
+        </td>
+        <td>
+          {% if u['is_active'] %}
+            <span class="badge badge-pass">Active</span>
+          {% else %}
+            <span class="badge badge-fail">Inactive</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">
+          {% if u['last_login'] %}{{ u['last_login'][:16].replace('T',' ') }}{% else %}—{% endif %}
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">{{ u['created_at'][:10] }}</td>
+        <td>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <a href="{{ url_for('admin_panel.user_edit', user_id=u['id']) }}"
+               class="btn btn-ghost" style="padding:5px 12px; font-size:12px;">Edit</a>
+            {% if u['id']|string != current_user.id %}
+            <form method="post" action="{{ url_for('admin_panel.user_delete', user_id=u['id']) }}"
+                  onsubmit="return confirm('Delete {{ u['username'] }}?')">
+              <button type="submit" class="btn btn-danger" style="padding:5px 12px; font-size:12px;">Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:12px; font-size:12px; color:var(--text-muted);">
+  {{ users|length }} user{{ 's' if users|length != 1 else '' }} total
+</div>
+{% endblock %}

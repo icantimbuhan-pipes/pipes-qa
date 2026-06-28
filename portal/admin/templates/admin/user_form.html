@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} User — Pipes.QA Admin{% endblock %}
+{% block breadcrumb %}Admin / Users / {{ action }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h1>{{ action }} User</h1>
+    <p>{% if user %}Edit account details and role assignment.{% else %}Create a new portal account.{% endif %}</p>
+  </div>
+  <a href="{{ url_for('admin_panel.users') }}" class="btn btn-ghost">← Back to Users</a>
+</div>
+
+<div style="max-width:540px;">
+  <div class="card">
+    {% if error %}
+    <div class="flash error" style="margin-bottom:20px;">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      <div style="display:flex; flex-direction:column; gap:18px;">
+
+        <div>
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email" required
+            value="{{ user['email'] if user else '' }}"
+            placeholder="user@pipes.ai">
+        </div>
+
+        <div>
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required
+            value="{{ user['username'] if user else '' }}"
+            placeholder="john.doe">
+        </div>
+
+        <div>
+          <label for="password">
+            Password{% if user %} <span style="font-weight:400; color:var(--text-muted);">— leave blank to keep current</span>{% endif %}
+          </label>
+          <input type="password" id="password" name="password"
+            {% if not user %}required{% endif %}
+            placeholder="{% if user %}New password (optional){% else %}Minimum 6 characters{% endif %}"
+            autocomplete="new-password">
+        </div>
+
+        <div>
+          <label for="role_id">Role</label>
+          <select id="role_id" name="role_id" required>
+            <option value="">Select a role…</option>
+            {% for role in roles %}
+            <option value="{{ role['id'] }}"
+              {% if user and user['role_id'] == role['id'] %}selected{% endif %}>
+              {{ role['name'] }} — {{ role['description'] }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="checkbox" id="is_active" name="is_active" value="1"
+            style="width:16px; height:16px; cursor:pointer;"
+            {% if user is none or user['is_active'] %}checked{% endif %}>
+          <label for="is_active" style="margin:0; cursor:pointer;">Account is active</label>
+        </div>
+
+        <div style="display:flex; gap:12px; padding-top:4px;">
+          <button type="submit" class="btn btn-primary" style="flex:1; justify-content:center;">
+            {{ action }} User
+          </button>
+          <a href="{{ url_for('admin_panel.users') }}" class="btn btn-ghost">Cancel</a>
+        </div>
+
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

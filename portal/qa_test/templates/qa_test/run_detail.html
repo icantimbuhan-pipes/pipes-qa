@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ run.feature_name or 'QA Run' }} — History — Pipes.QA{% endblock %}
+
+{% block content %}
+<style>
+  .findings-wrap { font-size:13px; line-height:1.7; white-space:pre-wrap; font-family:inherit; }
+  .status-pass    { color:var(--green);  font-weight:700; }
+  .status-fail    { color:var(--red);    font-weight:700; }
+  .status-warning { color:var(--yellow); font-weight:700; }
+  .result-pass    { background:var(--green-bg);  color:var(--green);  border:1px solid var(--green-border); }
+  .result-fail    { background:var(--red-bg);    color:var(--red);    border:1px solid var(--red-border); }
+  .result-partial { background:var(--yellow-bg); color:var(--yellow); border:1px solid var(--yellow-border); }
+  .result-unknown { background:var(--border-light); color:var(--text-muted); border:1px solid var(--border); }
+  .result-banner  { display:inline-block; padding:5px 14px; border-radius:6px; font-size:13px; font-weight:700; margin-bottom:16px; }
+</style>
+
+{# Breadcrumb #}
+<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--text-muted);">
+    <a href="{{ url_for('qa_test.index') }}" style="color:var(--accent); text-decoration:none;">QA Testing</a>
+    <span>›</span>
+    <a href="{{ url_for('qa_test.history') }}" style="color:var(--accent); text-decoration:none;">History</a>
+    <span>›</span>
+    <span>{{ run.feature_name or ('Run #' ~ run.id) }}</span>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button id="copy-btn" class="btn btn-ghost" style="padding:5px 12px; font-size:12px;">Copy</button>
+    <form method="post" action="{{ url_for('qa_test.delete_run', run_id=run.id) }}"
+          onsubmit="return confirm('Delete this run?');">
+      <button type="submit" class="btn btn-ghost" style="padding:5px 12px; font-size:12px; color:var(--red);">Delete</button>
+    </form>
+    <a href="{{ url_for('qa_test.history') }}" class="btn btn-ghost" style="padding:5px 12px; font-size:12px;">← Back</a>
+  </div>
+</div>
+
+{# Header #}
+<div class="page-header" style="margin-bottom:16px;">
+  <h1>{{ run.feature_name or ('QA Run #' ~ run.id) }}</h1>
+  <p style="font-family:var(--mono); font-size:12px; color:var(--text-muted);">
+    {{ run.created_at[:16].replace('T', ' ') }} &nbsp;·&nbsp; {{ run.backend or 'unknown backend' }}
+  </p>
+</div>
+
+{# Result banner #}
+<div class="result-banner result-{{ run.result.lower() if run.result in ['PASS','FAIL','PARTIAL'] else 'unknown' }}">
+  {% if run.result == 'PASS' %}✅ PASS
+  {% elif run.result == 'FAIL' %}❌ FAIL
+  {% elif run.result == 'PARTIAL' %}⚠️ PARTIAL
+  {% else %}{{ run.result }}{% endif %}
+</div>
+
+{# Findings #}
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:20px;">
+  <div id="findings-output" class="findings-wrap"></div>
+</div>
+
+<script>
+const raw = {{ run.findings | tojson }};
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderFindings(text) {
+  return text.split('\n').map(line => {
+    const esc = escHtml(line);
+    if (/^Status:\s*✅/.test(line))  return `<span class="status-pass">${esc}</span>`;
+    if (/^Status:\s*❌/.test(line))  return `<span class="status-fail">${esc}</span>`;
+    if (/^Status:\s*⚠️/.test(line)) return `<span class="status-warning">${esc}</span>`;
+    if (/^(Issue|Expected|Actual|Evidence|Recommendation|Possible Root Cause):/.test(line))
+      return `<strong>${esc}</strong>`;
+    if (/^─+$/.test(line)) return `<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">`;
+    if (/^(Test Scenario|Result|Issues Found|Recommendations):/.test(line))
+      return `<strong style="font-size:14px;">${esc}</strong>`;
+    return esc;
+  }).join('\n');
+}
+
+document.getElementById('findings-output').innerHTML = renderFindings(raw);
+
+document.getElementById('copy-btn').addEventListener('click', () => {
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+});
+</script>
+{% endblock %}

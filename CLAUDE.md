@@ -15,12 +15,14 @@ uv run python -m runner --provider heavy-khomp  # one provider
 
 | Skill | What it does |
 |-------|-------------|
+| `/ops:guide` | **Complete project reference** — start here if you need to understand anything |
 | `/daily-qa:run` | Master daily QA orchestrator — run this |
 | `/daily-qa:checklist` | View, edit, or add sections to the QA checklist |
 | `/daily-qa:add-provider` | Wire up Heavy FS, Lite Khomp, or Lite FS |
 | `/daily-qa:report` | View or resend the last Slack report |
 | `/validator:run` | API Validator — run rejection scenario tests |
 | `/validator:add-scenario` | Add a new rejection code test scenario |
+| `/qa:test` | QA Testing Assistant — submit evidence, get structured findings |
 | `/dnc:portal` | Manual DNC portal — paste numbers, fire postback, view log |
 | `/dnc:report` | Query and export the DNC log from the database |
 | `/sms:run` | SMS deliverability workflow — upload, reports, Slack |

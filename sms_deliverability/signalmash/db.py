@@ -1,4 +1,5 @@
 import sqlite3
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -147,3 +148,27 @@ def count_company_records(
         f"SELECT COUNT(*) FROM signalmash_records WHERE company_name = ? {clause}",
         [company_name] + params,
     ).fetchone()[0]
+
+
+def get_blocked_number_breakdown(
+    conn: sqlite3.Connection,
+    company_name: str,
+    **kw,
+) -> list[sqlite3.Row]:
+    """Return from_number × carrier × dlr_code breakdown for failed messages only."""
+    clause, params = _date_clause(**kw)
+    return conn.execute(f"""
+        SELECT
+            from_number,
+            COALESCE(NULLIF(trim(operator), ''), 'Unknown') AS carrier,
+            dlr_code,
+            dlr_description,
+            SUM(count) AS blocked_count
+        FROM signalmash_records
+        WHERE company_name = ?
+          AND dlr_code != '0'
+          AND from_number IS NOT NULL AND from_number != ''
+          {clause}
+        GROUP BY from_number, carrier, dlr_code
+        ORDER BY blocked_count DESC
+    """, [company_name] + params).fetchall()

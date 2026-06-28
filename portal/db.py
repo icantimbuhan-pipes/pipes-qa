@@ -299,6 +299,54 @@ def delete_custom_checklist(checklist_id: str):
         con.execute("DELETE FROM custom_checklists WHERE id=?", (checklist_id,))
 
 
+# ── QA Test Runs ──────────────────────────────────────────────────────────────
+
+def init_qa_test_runs():
+    with _conn() as con:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS qa_test_runs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                feature_name TEXT NOT NULL DEFAULT '',
+                result       TEXT NOT NULL DEFAULT 'UNKNOWN',
+                findings     TEXT NOT NULL DEFAULT '',
+                backend      TEXT NOT NULL DEFAULT '',
+                created_at   TEXT NOT NULL
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_qa_runs_created ON qa_test_runs(created_at)")
+
+
+def save_qa_run(feature_name: str, result: str, findings: str, backend: str) -> int:
+    with _conn() as con:
+        cur = con.execute(
+            """INSERT INTO qa_test_runs(feature_name, result, findings, backend, created_at)
+               VALUES(?,?,?,?,?)""",
+            (feature_name, result, findings, backend, datetime.now().isoformat()),
+        )
+        return cur.lastrowid
+
+
+def list_qa_runs(limit: int = 200):
+    with _conn() as con:
+        return con.execute(
+            """SELECT id, feature_name, result, backend, created_at
+               FROM qa_test_runs ORDER BY created_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+
+def get_qa_run(run_id: int) -> Optional[sqlite3.Row]:
+    with _conn() as con:
+        return con.execute(
+            "SELECT * FROM qa_test_runs WHERE id=?", (run_id,)
+        ).fetchone()
+
+
+def delete_qa_run(run_id: int):
+    with _conn() as con:
+        con.execute("DELETE FROM qa_test_runs WHERE id=?", (run_id,))
+
+
 # ── DNC Log ────────────────────────────────────────────────────────────────────
 
 def init_dnc_log():

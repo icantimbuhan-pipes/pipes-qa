@@ -211,3 +211,52 @@ def count_company_records(
         f"SELECT COUNT(*) FROM telgorithm_records WHERE company_name = ? {clause}",
         [company_name] + params,
     ).fetchone()[0]
+
+
+def get_blocked_number_breakdown(
+    conn: sqlite3.Connection,
+    company_name: str,
+    **kw,
+) -> list[sqlite3.Row]:
+    """Return from_number × carrier × error_code breakdown for failed messages only."""
+    clause, params = _date_clause(**kw)
+    return conn.execute(f"""
+        SELECT
+            from_number,
+            COALESCE(NULLIF(trim(recipient_carrier_name), ''), 'Unknown') AS carrier,
+            COALESCE(NULLIF(trim(error_code), ''), 'Unknown')             AS error_code,
+            COALESCE(NULLIF(trim(error_description), ''), '')             AS error_description,
+            COUNT(*) AS blocked_count
+        FROM telgorithm_records
+        WHERE company_name = ?
+          AND lower(status) != 'delivered'
+          AND from_number IS NOT NULL AND from_number != ''
+          {clause}
+        GROUP BY from_number, carrier, error_code
+        ORDER BY blocked_count DESC
+    """, [company_name] + params).fetchall()
+
+
+def get_failed_message_samples(
+    conn: sqlite3.Connection,
+    company_name: str,
+    limit: int = 10,
+    **kw,
+) -> list[sqlite3.Row]:
+    """Return unique message bodies from failed sends, ranked by failure frequency."""
+    clause, params = _date_clause(**kw)
+    return conn.execute(f"""
+        SELECT
+            text,
+            COUNT(*) AS fail_count,
+            COALESCE(NULLIF(trim(recipient_carrier_name), ''), 'Unknown') AS top_carrier,
+            COALESCE(NULLIF(trim(error_code), ''), 'Unknown')             AS top_error_code
+        FROM telgorithm_records
+        WHERE company_name = ?
+          AND lower(status) != 'delivered'
+          AND text IS NOT NULL AND trim(text) != ''
+          {clause}
+        GROUP BY text
+        ORDER BY fail_count DESC
+        LIMIT ?
+    """, [company_name] + params + [limit]).fetchall()

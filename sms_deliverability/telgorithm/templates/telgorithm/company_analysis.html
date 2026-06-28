@@ -162,5 +162,90 @@
 </div>
 {% endif %}
 
+{# ── Blocked sender numbers ── #}
+{% if blocked_numbers %}
+<div class="ana-section">
+  <div class="ana-sec-head">
+    Blocked sender numbers
+    <span style="display:flex; align-items:center; gap:10px;">
+      <span>{{ blocked_numbers|length }} number{% if blocked_numbers|length != 1 %}s{% endif %} flagged</span>
+      <a href="{{ url_for('telgorithm.blocked_csv_download', slug=slug, period=period) }}" class="btn btn-ghost" style="padding:3px 10px; font-size:11px; font-weight:600; letter-spacing:0; text-transform:none;">⬇ Download CSV</a>
+    </span>
+  </div>
+  <div class="ana-sec-body" style="padding:0;">
+    <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+      <thead>
+        <tr style="background:var(--bg); border-bottom:1px solid var(--border);">
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">From Number</th>
+          <th style="padding:8px 14px; text-align:right; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Blocked</th>
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Top Carrier</th>
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Top Error</th>
+          <th style="padding:8px 14px; text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in blocked_numbers %}
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:9px 14px; font-family:var(--mono); font-weight:600;">{{ n.number }}</td>
+          <td style="padding:9px 14px; text-align:right; font-family:var(--mono); color:var(--red); font-weight:700;">{{ "{:,}".format(n.blocked_count) }}</td>
+          <td style="padding:9px 14px; color:var(--text-secondary);">
+            {{ n.top_carrier }}
+            {% if n.carrier_count > 1 %}
+              <span style="font-size:10.5px; color:var(--text-muted); margin-left:4px;">(+{{ n.carrier_count - 1 }} more)</span>
+            {% endif %}
+          </td>
+          <td style="padding:9px 14px; font-size:12px; color:var(--text-secondary);">
+            <span style="font-family:var(--mono); font-weight:700; color:var(--text-muted); margin-right:4px;">{{ n.top_code }}</span>
+            {{ n.top_code_desc }}
+          </td>
+          <td style="padding:9px 14px; text-align:center;">
+            {% if n.needs_rotation %}
+              <span class="badge badge-fail" style="font-size:10px; white-space:nowrap;">Replace number</span>
+            {% else %}
+              <span class="badge" style="font-size:10px; white-space:nowrap; background:var(--yellow-bg); color:var(--yellow);">Monitor</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="padding:10px 14px; font-size:11.5px; color:var(--text-muted); border-top:1px solid var(--border);">
+      <strong>Replace number</strong> = blocked by 2+ carriers (number is likely on a cross-carrier blocklist). &nbsp;
+      <strong>Monitor</strong> = blocked by one carrier only.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Message content patterns ── #}
+{% if content_patterns %}
+<div class="ana-section">
+  <div class="ana-sec-head">
+    Message content patterns
+    <span>{{ content_patterns|length }} unique template{% if content_patterns|length != 1 %}s{% endif %} in failed sends</span>
+  </div>
+  <div class="ana-sec-body" style="padding:0;">
+    {% for p in content_patterns %}
+    <div style="padding:12px 14px; border-bottom:1px solid var(--border); {% if loop.last %}border-bottom:none;{% endif %}">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:6px;">
+        <div style="font-size:12px; font-family:var(--mono); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:8px 10px; flex:1; white-space:pre-wrap; word-break:break-word; line-height:1.5; color:var(--text);">{{ p.text[:300] }}{% if p.text|length > 300 %}<span style="color:var(--text-muted);">…</span>{% endif %}</div>
+        <div style="flex-shrink:0; text-align:right; min-width:90px;">
+          <div style="font-family:var(--mono); font-size:16px; font-weight:700; color:var(--red);">{{ "{:,}".format(p.fail_count) }}</div>
+          <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;">failed sends</div>
+        </div>
+      </div>
+      <div style="font-size:11.5px; color:var(--text-muted);">
+        <span style="margin-right:14px;">Carrier: <strong style="color:var(--text-secondary);">{{ p.top_carrier }}</strong></span>
+        <span>Error: <strong style="font-family:var(--mono); color:var(--text-secondary);">{{ p.top_error }}</strong></span>
+      </div>
+    </div>
+    {% endfor %}
+    <div style="padding:10px 14px; font-size:11.5px; color:var(--text-muted); background:var(--bg); border-top:1px solid var(--border);">
+      Review message templates for URLs, brand names, opt-out language, and phrasing that may trigger carrier content filters.
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endif %}{# /if kpi #}
 {% endblock %}

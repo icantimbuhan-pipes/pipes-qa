@@ -1,16 +1,19 @@
 import csv
 import io
+import os
 import uuid
 from datetime import date as date_type
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 
 from sms_deliverability.signalmash.campaign_map import CAMPAIGN_MAP, SLUG_TO_COMPANY, slugify
 from sms_deliverability.signalmash.db import (
     count_company_records,
     get_available_dates,
+    get_blocked_number_breakdown,
     get_companies,
     get_company_records,
     get_company_stats,
@@ -552,7 +555,8 @@ def analysis():
 # ── Per-company analysis ──────────────────────────────────────────────────────
 
 def _build_company_analysis_data(company_name: str, period: str):
-    """Return (kpi, failures, action_items, period_label) for one company."""
+    """Return (kpi, failures, action_items, period_label, blocked_numbers) for one company."""
+    from collections import defaultdict
     from sms_deliverability.analysis_kb import (
         get_signalmash, delivery_status, SEVERITY_BADGE, STATUS_BADGE, SEVERITY_ORDER
     )
@@ -562,7 +566,7 @@ def _build_company_analysis_data(company_name: str, period: str):
 
     all_dates = [r["report_date"] for r in available_dates] if available_dates else []
     if not all_dates:
-        return None, [], [], ""
+        return None, [], [], "", []
 
     latest = max(all_dates)
 
@@ -581,9 +585,10 @@ def _build_company_analysis_data(company_name: str, period: str):
     with get_conn() as conn:
         stats        = get_company_stats(conn, company_name, **date_filter)
         failures_raw = get_failure_breakdown(conn, company_name, **date_filter)
+        blocked_raw  = get_blocked_number_breakdown(conn, company_name, **date_filter)
 
     if stats is None or stats["total"] == 0:
-        return None, [], [], period_label
+        return None, [], [], period_label, []
 
     total, delivered, failed = stats["total"], stats["delivered"], stats["failed"]
     rate   = rate_pct(delivered, total)
@@ -628,7 +633,35 @@ def _build_company_analysis_data(company_name: str, period: str):
                 "count": f["count"], "action": f["action"],
             })
 
-    return kpi, failures, action_items, period_label
+    # ── Aggregate blocked sender numbers ─────────────────────────────────────
+    num_data: dict = defaultdict(lambda: {
+        "total": 0, "carriers": defaultdict(int),
+        "top_code": "", "top_code_desc": "", "top_code_count": 0,
+    })
+    for row in blocked_raw:
+        n = row["from_number"]
+        num_data[n]["total"] += row["blocked_count"]
+        num_data[n]["carriers"][row["carrier"]] += row["blocked_count"]
+        if row["blocked_count"] > num_data[n]["top_code_count"]:
+            num_data[n]["top_code"]       = row["dlr_code"]
+            num_data[n]["top_code_desc"]  = row["dlr_description"] or row["dlr_code"]
+            num_data[n]["top_code_count"] = row["blocked_count"]
+
+    blocked_numbers = []
+    for num, data in sorted(num_data.items(), key=lambda x: -x[1]["total"])[:15]:
+        top_carrier   = max(data["carriers"], key=data["carriers"].get) if data["carriers"] else "Unknown"
+        carrier_count = len(data["carriers"])
+        blocked_numbers.append({
+            "number":        num,
+            "blocked_count": data["total"],
+            "top_carrier":   top_carrier,
+            "carrier_count": carrier_count,
+            "top_code":      data["top_code"],
+            "top_code_desc": data["top_code_desc"],
+            "needs_rotation": carrier_count >= 2,
+        })
+
+    return kpi, failures, action_items, period_label, blocked_numbers
 
 
 @bp.route("/analysis/<slug>")
@@ -638,12 +671,64 @@ def company_analysis(slug: str):
         abort(404)
 
     period = request.args.get("period", "month")
-    kpi, failures, action_items, period_label = _build_company_analysis_data(company_name, period)
+    kpi, failures, action_items, period_label, blocked_numbers = _build_company_analysis_data(company_name, period)
 
     return render_template("signalmash/company_analysis.html",
         company_name=company_name, slug=slug,
         period=period, period_label=period_label,
         kpi=kpi, failures=failures, action_items=action_items,
+        blocked_numbers=blocked_numbers,
+    )
+
+
+def _generate_blocked_csv(company_name: str, period_label: str, blocked_numbers: list) -> str:
+    """Generate a CSV string for blocked sender numbers analysis."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([f"BLOCKED SENDER NUMBERS — {company_name}"])
+    w.writerow([f"Period: {period_label}"])
+    w.writerow([])
+    w.writerow(["From Number", "Total Blocked", "Top Carrier", "Carriers Blocking", "Top DLR Code", "Error Description", "Recommended Action"])
+    for n in blocked_numbers:
+        w.writerow([
+            n["number"], n["blocked_count"], n["top_carrier"],
+            n["carrier_count"], n["top_code"], n["top_code_desc"],
+            "Replace number" if n["needs_rotation"] else "Monitor",
+        ])
+    return buf.getvalue()
+
+
+def _upload_csv_to_slack(channel_id: str, bot_token: str, filename: str, csv_data: str, comment: str = "") -> tuple[bool, str]:
+    """Upload a CSV file to Slack using the bot token."""
+    try:
+        resp = httpx.post(
+            "https://slack.com/api/files.upload",
+            headers={"Authorization": f"Bearer {bot_token}"},
+            data={"channels": channel_id, "filename": filename, "filetype": "csv", "initial_comment": comment},
+            files={"file": (filename, csv_data.encode("utf-8"), "text/csv")},
+            timeout=30,
+        )
+        result = resp.json()
+        if result.get("ok"):
+            return True, f"CSV file uploaded to Slack: {filename}"
+        return False, f"Slack file upload: {result.get('error', 'unknown error')}"
+    except Exception as exc:
+        return False, f"File upload failed: {exc}"
+
+
+@bp.route("/analysis/<slug>/blocked-csv")
+def blocked_csv_download(slug: str):
+    company_name = SLUG_TO_COMPANY.get(slug)
+    if not company_name:
+        abort(404)
+    period = request.args.get("period", "month")
+    _, _, _, period_label, blocked_numbers = _build_company_analysis_data(company_name, period)
+    csv_data = _generate_blocked_csv(company_name, period_label, blocked_numbers)
+    filename = f"blocked_numbers_{slugify(company_name)}_{period}.csv"
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -654,7 +739,7 @@ def company_analysis_slack(slug: str):
         abort(404)
 
     period = request.form.get("period", "month")
-    kpi, failures, _, period_label = _build_company_analysis_data(company_name, period)
+    kpi, failures, _, period_label, blocked_numbers = _build_company_analysis_data(company_name, period)
 
     if kpi is None:
         flash("No data for this period.", "error")
@@ -663,4 +748,16 @@ def company_analysis_slack(slug: str):
     payload = slack_mod.build_company_payload(company_name, period_label, kpi, failures)
     success, message = slack_mod.send(payload)
     flash(message, "success" if success else "error")
+
+    # Upload blocked numbers CSV if channel ID and bot token are configured
+    if success and blocked_numbers:
+        channel_id = os.environ.get("SMS_SLACK_CHANNEL_ID", "").strip()
+        bot_token  = os.environ.get("SLACK_BOT_TOKEN", "").strip()
+        if channel_id and bot_token:
+            csv_data = _generate_blocked_csv(company_name, period_label, blocked_numbers)
+            filename = f"blocked_numbers_{slugify(company_name)}_{period}.csv"
+            comment  = f"📋 Blocked sender numbers for *{company_name}* ({period_label}) — {len(blocked_numbers)} numbers flagged"
+            ok, msg  = _upload_csv_to_slack(channel_id, bot_token, filename, csv_data, comment)
+            flash(msg, "success" if ok else "error")
+
     return redirect(url_for("signalmash.company_analysis", slug=slug, period=period))

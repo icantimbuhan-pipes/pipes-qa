@@ -162,5 +162,82 @@
 </div>
 {% endif %}
 
+{# ── Blocked sender numbers ── #}
+{% if blocked_numbers %}
+<div class="ana-section">
+  <div class="ana-sec-head">
+    Blocked sender numbers
+    <span style="display:flex; align-items:center; gap:10px;">
+      <span>{{ blocked_numbers|length }} number{% if blocked_numbers|length != 1 %}s{% endif %} flagged</span>
+      <a href="{{ url_for('signalmash.blocked_csv_download', slug=slug, period=period) }}" class="btn btn-ghost" style="padding:3px 10px; font-size:11px; font-weight:600; letter-spacing:0; text-transform:none;">⬇ Download CSV</a>
+    </span>
+  </div>
+  <div class="ana-sec-body" style="padding:0;">
+    <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+      <thead>
+        <tr style="background:var(--bg); border-bottom:1px solid var(--border);">
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">From Number</th>
+          <th style="padding:8px 14px; text-align:right; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Blocked</th>
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Top Carrier</th>
+          <th style="padding:8px 14px; text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Top Error</th>
+          <th style="padding:8px 14px; text-align:center; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in blocked_numbers %}
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:9px 14px; font-family:var(--mono); font-weight:600;">{{ n.number }}</td>
+          <td style="padding:9px 14px; text-align:right; font-family:var(--mono); color:var(--red); font-weight:700;">{{ "{:,}".format(n.blocked_count) }}</td>
+          <td style="padding:9px 14px; color:var(--text-secondary);">
+            {{ n.top_carrier }}
+            {% if n.carrier_count > 1 %}
+              <span style="font-size:10.5px; color:var(--text-muted); margin-left:4px;">(+{{ n.carrier_count - 1 }} more)</span>
+            {% endif %}
+          </td>
+          <td style="padding:9px 14px; font-size:12px;">
+            <span style="font-family:var(--mono); font-weight:700; color:var(--text-muted);">DLR {{ n.top_code }}</span>
+            {% if n.top_code_desc %}<span style="color:var(--text-secondary); margin-left:6px;">{{ n.top_code_desc }}</span>{% endif %}
+          </td>
+          <td style="padding:9px 14px; text-align:center;">
+            {% if n.needs_rotation %}
+              <span class="badge badge-fail" style="font-size:10px; white-space:nowrap;">Replace number</span>
+            {% else %}
+              <span class="badge" style="font-size:10px; white-space:nowrap; background:var(--yellow-bg); color:var(--yellow);">Monitor</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="padding:10px 14px; font-size:11.5px; color:var(--text-muted); border-top:1px solid var(--border);">
+      <strong>Replace number</strong> = blocked by 2+ carriers (number is likely on a cross-carrier blocklist). &nbsp;
+      <strong>Monitor</strong> = blocked by one carrier only.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── SMS content note (Signalmash limitation) ── #}
+{% if kpi %}
+<div class="ana-section">
+  <div class="ana-sec-head">Message content analysis <span>not available for Signalmash</span></div>
+  <div class="ana-sec-body" style="display:flex; gap:14px; align-items:flex-start; font-size:13px;">
+    <span style="font-size:22px; flex-shrink:0; margin-top:2px;">ℹ️</span>
+    <div>
+      <div style="font-weight:600; margin-bottom:5px;">Signalmash exports don't include message text</div>
+      <div style="color:var(--text-secondary); line-height:1.6;">
+        Signalmash CSV reports contain delivery receipt aggregates (counts per DLR code per sender) — the actual SMS content is not exported.<br>
+        To identify message wording triggering carrier filters:
+        <ul style="margin:6px 0 0 18px; padding:0;">
+          <li>Check the <strong>Telgorithm analysis</strong> page for the same campaign — Telgorithm records full message text</li>
+          <li>Review your message templates in the campaign platform directly</li>
+          <li>Look for URLs, brand names, opt-out phrases, or special characters that carriers commonly flag</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endif %}{# /if kpi #}
 {% endblock %}
